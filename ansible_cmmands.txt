@@ -1,0 +1,238 @@
+encrypt_string --prompt --ask-vault-pass --output 'vault.yml' --name "password"
+ansible-playbook -i test.yml -k test_playbook.yml --user="theronj" --ask-pass -e ansible_network_os=cisco.ios.ios
+pip freeze -l > requirements.txt
+
+#######################List of all the ansible facts###################################
+    "ansible_facts": {
+        "ansible_net_all_ipv4_addresses": [
+            "10.20.68.103"
+        ],
+        "ansible_net_all_ipv6_addresses": [],
+        "ansible_net_api": "cliconf",
+        "ansible_net_config": "show running-config\r\nshow running-config\r\n      ^\r\n% Invalid input detected at '^
+' marker.\r\n\r\norcott7762-i1i21s1>",
+        "ansible_net_filesystems": [],
+        "ansible_net_filesystems_info": {},
+        "ansible_net_gather_network_resources": [],
+        "ansible_net_gather_subset": [
+            "interfaces",
+            "default",
+            "config",
+            "hardware"
+        ],
+        "ansible_net_hostname": "orcott7762-i1i21s1",
+        "ansible_net_image": "flash:/c2960cx-universalk9-mz.152-7.E/c2960cx-universalk9-mz.152-7.E.bin",
+        "ansible_net_interfaces": {
+            "GigabitEthernet0/1": {
+                "bandwidth": 10000,
+                "description": "Device on Business LAN plugged into IP Phone",
+                "duplex": null,
+                "ipv4": [],
+                "lineprotocol": "down",
+                "macaddress": "cc90.704e.8181",
+                "mediatype": "10/100/1000BaseTX",
+                "mtu": 1500,
+                "operstatus": "down",
+                "type": "Gigabit Ethernet"
+            },
+            "GigabitEthernet0/10": {
+                "bandwidth": 1000000,
+                "description": "Uplink",
+                "duplex": null,
+                "ipv4": [],
+                "lineprotocol": "up",
+                "macaddress": "cc90.704e.818a",
+                "mediatype": "10/100/1000BaseTX",
+                "mtu": 1500,
+                "operstatus": "up",
+                "type": "Gigabit Ethernet"
+            },
+            "GigabitEthernet0/11": {
+                "bandwidth": 10000,
+                "description": "Uplink",
+                "duplex": null,
+                "ipv4": [],
+                "lineprotocol": "down",
+                "macaddress": "cc90.704e.818b",
+                "mediatype": "Not Present",
+                "mtu": 1500,
+                "operstatus": "down",
+                "type": "Gigabit Ethernet"
+            },
+            "GigabitEthernet0/12": {
+                "bandwidth": 10000,
+                "description": "Uplink",
+                "duplex": null,
+                "ipv4": [],
+                "lineprotocol": "down",
+                "macaddress": "cc90.704e.818c",
+                "mediatype": "Not Present",
+                "mtu": 1500,
+                "operstatus": "down",
+                "type": "Gigabit Ethernet"
+            },
+            "GigabitEthernet0/2": {
+                "bandwidth": 10000,
+                "description": "Device on Business LAN plugged into IP Phone",
+                "duplex": null,
+                "ipv4": [],
+                "lineprotocol": "down",
+                "macaddress": "cc90.704e.8182",
+                "mediatype": "10/100/1000BaseTX",
+                "mtu": 1500,
+                "operstatus": "down",
+                "type": "Gigabit Ethernet"
+            },
+            "GigabitEthernet0/3": {
+                "bandwidth": 10000,
+                "description": "Device on Business LAN plugged into IP Phone",
+                "duplex": null,
+                "ipv4": [],
+                "lineprotocol": "down",
+                "macaddress": "cc90.704e.8183",
+                "mediatype": "10/100/1000BaseTX",
+                "mtu": 1500,
+                "operstatus": "down",
+                "type": "Gigabit Ethernet"
+            },
+            "GigabitEthernet0/4": {
+                "bandwidth": 10000,
+                "description": "Device on Business LAN plugged into IP Phone",
+                "duplex": null,
+                "ipv4": [],
+                "lineprotocol": "down",
+                "macaddress": "cc90.704e.8184",
+                "mediatype": "10/100/1000BaseTX",
+                "mtu": 1500,
+                "operstatus": "down",
+                "type": "Gigabit Ethernet"
+            },
+            "GigabitEthernet0/5": {
+                "bandwidth": 10000,
+                "description": "Device on Business LAN plugged into IP Phone",
+                "duplex": null,
+                "ipv4": [],
+                "lineprotocol": "down",
+                "macaddress": "cc90.704e.8185",
+                "mediatype": "10/100/1000BaseTX",
+                "mtu": 1500,
+                "operstatus": "down",
+                "type": "Gigabit Ethernet"
+            },
+            "GigabitEthernet0/6": {
+                "bandwidth": 10000,
+                "description": "Device on Business LAN plugged into IP Phone",
+                "duplex": null,
+                "ipv4": [],
+                "lineprotocol": "down",
+                "macaddress": "cc90.704e.8186",
+                "mediatype": "10/100/1000BaseTX",
+                "mtu": 1500,
+                "operstatus": "down",
+                "type": "Gigabit Ethernet"
+            },
+            "GigabitEthernet0/7": {
+                "bandwidth": 10000,
+                "description": "Device on Business LAN plugged into IP Phone",
+                "duplex": null,
+                "ipv4": [],
+                "lineprotocol": "down",
+                "macaddress": "cc90.704e.8187",
+                "mediatype": "10/100/1000BaseTX",
+                "mtu": 1500,
+                "operstatus": "down",
+                "type": "Gigabit Ethernet"
+            },
+            "GigabitEthernet0/8": {
+                "bandwidth": 10000,
+                "description": "Meraki Access Point",
+                "duplex": null,
+                "ipv4": [],
+                "lineprotocol": "down",
+                "macaddress": "cc90.704e.8188",
+                "mediatype": "10/100/1000BaseTX",
+                "mtu": 1500,
+                "operstatus": "down",
+                "type": "Gigabit Ethernet"
+            },
+            "GigabitEthernet0/9": {
+                "bandwidth": 10000,
+                "description": "Uplink",
+                "duplex": null,
+                "ipv4": [],
+                "lineprotocol": "down",
+                "macaddress": "cc90.704e.8189",
+                "mediatype": "10/100/1000BaseTX",
+                "mtu": 1500,
+                "operstatus": "down",
+                "type": "Gigabit Ethernet"
+            },
+            "Vlan1": {
+                "bandwidth": 1000000,
+                "description": null,
+                "duplex": null,
+                "ipv4": [],
+                "lineprotocol": "down",
+                "macaddress": "cc90.704e.81c0",
+                "mediatype": null,
+                "mtu": 1500,
+                "operstatus": "administratively down",
+                "type": "EtherSVI"
+            },
+            "Vlan115": {
+                "bandwidth": 1000000,
+                "description": null,
+                "duplex": null,
+                "ipv4": [
+                    {
+                        "address": "10.20.68.103",
+                        "subnet": "25"
+                    }
+                ],
+                "lineprotocol": "up",
+                "macaddress": "cc90.704e.81c1",
+                "mediatype": null,
+                "mtu": 1500,
+                "operstatus": "up",
+                "type": "EtherSVI"
+            }
+        },
+        "ansible_net_iostype": "IOS",
+        "ansible_net_memfree_mb": 277076.58203125,
+        "ansible_net_memtotal_mb": 380737.640625,
+        "ansible_net_model": "WS-C2960CX-8PC-L",
+        "ansible_net_neighbors": {
+            "GigabitEthernet0/10": [
+                {
+                    "host": "00180ac10472",
+                    "ip": "10.20.68.13",
+                    "platform": "MS220-48LP",
+                    "port": "Port 44"
+                }
+            ]
+        },
+        "ansible_net_operatingmode": "autonomous",
+        "ansible_net_python_version": "3.8.10",
+        "ansible_net_serialnum": "FOC2550YCN7",
+        "ansible_net_stacked_models": [
+            "WS-C2960CX-8PC-L"
+        ],
+        "ansible_net_stacked_serialnums": [
+            "FOC2550YCN7"
+        ],
+        "ansible_net_system": "ios",
+        "ansible_net_version": "15.2(7)E",
+        "ansible_net_virtual_switch": "STACK",
+        "ansible_network_resources": {}
+    },
+    "changed": false,
+    "invocation": {
+        "module_args": {
+            "available_network_resources": false,
+            "gather_network_resources": null,
+            "gather_subset": [
+                "all"
+            ]
+        }
+    }
+}
