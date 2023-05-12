@@ -43,7 +43,7 @@ class Crawl_create:
             dev.disconnect()
         except Exception as e:
             sys.stderr.write(f"Could not connect to device {device} Error is {e}")  
-            self.visited_switches.append(device)
+            self.visited_switches.append(device.split(".")[0])
             traceback.print_exc() 
             return {},testbed
             
