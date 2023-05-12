@@ -1,5 +1,16 @@
 encrypt_string --prompt --ask-vault-pass --output 'vault.yml' --name "password"
 ansible-playbook -i test.yml -k test_playbook.yml --user="theronj" --ask-pass -e ansible_network_os=cisco.ios.ios
+#run ansible in enable mode
+ansible-playbook -i test.yml -k test_playbook.yml --user="theronj" --ask-pass -e ansible_network_os=cisco.ios.ios ansible_become_method=enable -b
+# make ssh able to log into weak incryption
+ansible-playbook -i test.yml -k test_playbook.yml --user="theronj" --ask-pass -e ansible_network_os=cisco.ios.ios ansible_become_method=enable -b --ssh-extra-args -c aes128-cbc
+
+#the ~/.ssh/config file had to have this added to let uniconect use the old incryption:
+
+Host *
+  SendEnv LANG LC_*
+  Ciphers +aes256-cbc
+
 pip freeze -l > requirements.txt
 
 #######################List of all the ansible facts###################################
