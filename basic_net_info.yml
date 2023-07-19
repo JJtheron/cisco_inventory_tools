@@ -1,6 +1,6 @@
 ---
 
-- name: Network Getting Started First Playbook
+- name: Grab info for network switches
   connection: ansible.netcommon.network_cli
   gather_facts: false
   hosts: all
@@ -9,19 +9,21 @@
       prompt: What is en passoword?
   vars:
     ansible_become_password: "{{enpassword}}"
+    location: "Eugene"
   tasks:
 
     - name: Get config for Ios devices
       cisco.ios.ios_facts:
-        gather_subset:
-          - config 
+        gather_subset: all 
 
-    - name: Display the config
-      debug:
-        msg: "{{ ansible_net_hostname }},{{ ansible_net_model }},{{ ansible_net_version }}, {{ ansible_net_stacked_serialnums }}"
-       
+    - name: Save the Config
+      ansible.builtin.lineinfile:
+        path: "./{{ location }}/List_sum.csv" 
+        line: "{{ ansible_net_interfaces.Vlan215.ipv4[0].address }},{{ ansible_net_hostname }},{{ ansible_net_model }},{{ ansible_net_version }}, {{ ansible_net_stacked_serialnums }}"
+        create: yes
+        
     
     - name: Save all to file
       copy:
         content: "{{ ansible_net_config }}"
-        dest: "./CottageGrove/{{ ansible_net_hostname }}_sh_run.txt" 
+        dest: "./{{ location }}/{{ ansible_net_hostname }}_sh_run.txt" 
