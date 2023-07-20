@@ -9,6 +9,8 @@ import traceback
 import re
 import fire
 import getpass
+from anytree import Node
+from anytree.exporter import DotExporter
 
 class Crawl_create:
     def __init__(self,test_bed_name = "default", os="ios", user = "", password = "", device_name = "first_device", ip_address = "", protocol = "ssh", port = "22"):
@@ -29,8 +31,10 @@ class Crawl_create:
                                 "ip":ip_address,
                                 "port":port
         }}))
+        self.tree = Node(device_name)
+        self.top = self.tree
         self.visited_switches = []
-        self.cdp_crawler(self.testbed)    
+        self.cdp_crawler(self.testbed,self.tree)    
 #functions for crawling through environment using cdp
 #-----------------------------------------------------------------------------------------------------------------
 #VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
@@ -75,10 +79,10 @@ class Crawl_create:
                 if ip_address:
                     testbed.add_device(new_device)
         return testbed
-#TODO: LLDP crawler    
+#TODO: LLDP crawler
 
 #CDP crawler:
-    def cdp_crawler(self,testbed):
+    def cdp_crawler(self,testbed,tree):
         dev_copy = testbed.devices.copy()
         cdp = {}
         for device in dev_copy:
@@ -86,10 +90,13 @@ class Crawl_create:
                 cdp, testbed = self._get_cdp_info(testbed,device)
                 if cdp:
                     testbed = self._add_cdp_device_to_testbed(cdp,testbed, device)
+
+
                 #Go down one level in the search tree
-                self.cdp_crawler(testbed)
+                tree=Node(device.split(".")[0],parent=tree)
+                self.cdp_crawler(testbed,tree)
         self.testbed = testbed
-        return testbed
+        return testbed, tree
 
 #functions for crawling through environment using cdp
 #-----------------------------------------------------------------------------------------------------------------
@@ -127,8 +134,11 @@ class Crawl_create:
             except:
                 my_ip = self.testbed.devices[device].connections.cli.ip
             ansible_hosts["all"]["hosts"][device] = {"ansible_host": my_ip }
-        
     
+    def print_out_map(self):
+        DotExporter(self.top).to_picture("network.png")
+    
+
         with open(f"ansible_{self.testbed.name}.yml", 'w') as tbfile:
             yaml.dump(ansible_hosts,tbfile)
         return ansible_hosts
