@@ -11,6 +11,7 @@ import fire
 import getpass
 from anytree import Node
 from anytree.exporter import DotExporter
+from anytree.resolver import Resolver
 
 class Crawl_create:
     def __init__(self,test_bed_name = "default", os="ios", user = "", password = "", device_name = "first_device", ip_address = "", protocol = "ssh", port = "22"):
@@ -58,18 +59,33 @@ class Crawl_create:
 
         return cdp_parsed, testbed
 
-    def _add_cdp_device_to_testbed(self, cdp_object,testbed, device):
+    #check within one lovel of the tree to find location
+    def _search_within(self,tree,device):
+        if not tree:
+            return None
+        if device == tree.name:
+            return tree
+        top = tree
+        for child in tree.children:
+            newTree =  self._search_within(child,device)
+            if newTree:
+                return newTree
+    
+
+    def _add_cdp_device_to_testbed(self, cdp_object,testbed, device,tree):
         ip_address = ""
         for index in cdp_object['index']:
-            if cdp_object['index'][index]['device_id'].split(".")[0].upper() not in [i.split(".")[0].upper() for i in list(testbed.devices.keys())]:
-                software_version = cdp_object["index"][index]["software_version"] 
+            if cdp_object['index'][index]['device_id'].split(".")[0] not in [i.split(".")[0] for i in list(testbed.devices.keys())]:
+                software_version = cdp_object["index"][index]["software_version"]  
+                nodeName = cdp_object['index'][index]['device_id'].split(".")[0]
+                Node(nodeName,parent=tree)
                 try: 
                     ip_address = list(cdp_object['index'][index]["management_addresses"].keys())[0]
                 except:
                     ip_address = ""
                     print(f"{cdp_object['index'][index]['device_id']} does not have a IP address!!!------------------------<<<<<<<<<<<<")
                 my_os = "ios" if re.search("ios",software_version,re.IGNORECASE) else software_version.split(",")[0]
-                new_device = Device(cdp_object['index'][index]['device_id'],
+                new_device = Device(cdp_object['index'][index]['device_id'].split(".")[0],
                                          os = my_os,
                                          connections = {'cli':
                                                         {'protocol':'ssh',
@@ -78,7 +94,7 @@ class Crawl_create:
                                         )
                 if ip_address:
                     testbed.add_device(new_device)
-        return testbed
+        return testbed,tree
 #TODO: LLDP crawler
 
 #CDP crawler:
@@ -86,15 +102,20 @@ class Crawl_create:
         dev_copy = testbed.devices.copy()
         cdp = {}
         for device in dev_copy:
-            if device.split(".")[0] not in self.visited_switches:
+            device = device.split(".")[0]
+            if device not in self.visited_switches:
+                tree = self._search_within(tree.root,device)
+                print("---------------------------returned value-------------------------------------------")
+                print(tree.name)
+                print("----------------------------------------------------------------------")
                 cdp, testbed = self._get_cdp_info(testbed,device)
                 if cdp:
-                    testbed = self._add_cdp_device_to_testbed(cdp,testbed, device)
+                    testbed,tree = self._add_cdp_device_to_testbed(cdp,testbed, device ,tree)
 
 
                 #Go down one level in the search tree
-                tree=Node(device.split(".")[0],parent=tree)
                 self.cdp_crawler(testbed,tree)
+        self.tree = tree
         self.testbed = testbed
         return testbed, tree
 
@@ -135,13 +156,14 @@ class Crawl_create:
                 my_ip = self.testbed.devices[device].connections.cli.ip
             ansible_hosts["all"]["hosts"][device] = {"ansible_host": my_ip }
     
-    def print_out_map(self):
-        DotExporter(self.top).to_picture("network.png")
     
 
         with open(f"ansible_{self.testbed.name}.yml", 'w') as tbfile:
             yaml.dump(ansible_hosts,tbfile)
         return ansible_hosts
+    
+    def print_out_map(self):
+        DotExporter(self.top).to_picture("network.png")
 
 
 if __name__ == "__main__":
