@@ -9,7 +9,7 @@
       prompt: What is en passoword?
   vars:
     ansible_become_password: "{{enpassword}}"
-    location: "Eugene"
+    location: "Cottage"
   tasks:
 
     - name: Get config for Ios devices

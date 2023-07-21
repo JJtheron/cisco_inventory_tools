@@ -105,9 +105,6 @@ class Crawl_create:
             device = device.split(".")[0]
             if device not in self.visited_switches:
                 tree = self._search_within(tree.root,device)
-                print("---------------------------returned value-------------------------------------------")
-                print(tree.name)
-                print("----------------------------------------------------------------------")
                 cdp, testbed = self._get_cdp_info(testbed,device)
                 if cdp:
                     testbed,tree = self._add_cdp_device_to_testbed(cdp,testbed, device ,tree)
