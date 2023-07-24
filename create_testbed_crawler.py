@@ -9,9 +9,36 @@ import traceback
 import re
 import fire
 import getpass
-from anytree import Node
+#from anytree import Node
 from anytree.exporter import DotExporter
 from anytree.resolver import Resolver
+from anytree import NodeMixin
+
+class Switch(object):
+     switch_info = {}
+     name = ""
+class Switching_Network(Switch,NodeMixin):
+    def __init__(self,name,switch_info={},parent=None,children=None):
+        super(Switching_Network,self).__init__()
+        self.name = name
+        self.switch_info = switch_info
+        self.parent = parent
+        if children:
+            self.children = children
+    
+def edge_attribute(node,child):
+
+    return 'label="%s->%s"' % (child.switch_info['local_interface'],child.switch_info['port_id'])
+
+def node_get_name(node):
+    if node.switch_info:
+       return f""" {node.name}
+{node.switch_info['platform']}
+{node.switch_info['management_addresses']}
+{node.switch_info['software_version']}
+                """
+    else:
+       return node.name
 
 class Crawl_create:
     def __init__(self,test_bed_name = "default", os="ios", user = "", password = "", device_name = "first_device", ip_address = "", protocol = "ssh", port = "22"):
@@ -32,7 +59,7 @@ class Crawl_create:
                                 "ip":ip_address,
                                 "port":port
         }}))
-        self.tree = Node(device_name)
+        self.tree  = Switching_Network(device_name,{})
         self.top = self.tree
         self.visited_switches = []
         self.cdp_crawler(self.testbed,self.tree)    
@@ -78,7 +105,7 @@ class Crawl_create:
             if cdp_object['index'][index]['device_id'].split(".")[0] not in [i.split(".")[0] for i in list(testbed.devices.keys())]:
                 software_version = cdp_object["index"][index]["software_version"]  
                 nodeName = cdp_object['index'][index]['device_id'].split(".")[0]
-                Node(nodeName,parent=tree)
+                Switching_Network(nodeName,cdp_object['index'][index],parent=tree)
                 try: 
                     ip_address = list(cdp_object['index'][index]["management_addresses"].keys())[0]
                 except:
@@ -160,8 +187,11 @@ class Crawl_create:
         return ansible_hosts
     
     def print_out_map(self):
-        DotExporter(self.top).to_picture("network.png")
-
+        dot = DotExporter(self.top,edgeattrfunc=edge_attribute,
+                          nodenamefunc=node_get_name,
+                          nodeattrfunc=lambda node: "shape=box")
+        dot.to_dotfile("network.dot")
+        dot.to_picture("network.png")
 
 if __name__ == "__main__":
     fire.Fire(Crawl_create)
