@@ -33,9 +33,10 @@ def edge_attribute(node,child):
 def node_get_name(node):
     if node.switch_info:
        return f""" {node.name}
-{node.switch_info['platform']}
+{node.switch_info['chassis']}
 {node.switch_info['management_addresses']}
 {node.switch_info['software_version']}
+{node.switch_info['SN']}
                 """
     else:
        return node.name
@@ -68,23 +69,26 @@ class Crawl_create:
 #VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
     def _get_cdp_info(self,testbed,device):
         command = 'show cdp nei detail'
+        command2 = "show version"
         try:
             dev = testbed.devices[device]
             dev.connect(learn_hostname=True,goto_enable=False,init_exec_commands=[],init_config_commands=[])
             cdp = dev.default.execute(command)
+            version =  dev.default.execute(command2)
             dev.disconnect()
         except Exception as e:
             sys.stderr.write(f"Could not connect to device {device} Error is {e}")  
             self.visited_switches.append(device.split(".")[0])
             traceback.print_exc() 
-            return {},testbed
+            return {},testbed,{}
             
         parse_object = GenieCommandParse(nos=dev.os)
         testbed.devices[dev.hostname] = testbed.devices.pop(device)
         cdp_parsed =  parse_object.parse_string(show_command = command, show_output_data = cdp)
+        version_parsed =  parse_object.parse_string(show_command = command2, show_output_data = version)
         self.visited_switches.append(dev.hostname)
 
-        return cdp_parsed, testbed
+        return cdp_parsed, testbed, version_parsed
 
     #check within one lovel of the tree to find location
     def _search_within(self,tree,device):
@@ -105,13 +109,15 @@ class Crawl_create:
             if cdp_object['index'][index]['device_id'].split(".")[0] not in [i.split(".")[0] for i in list(testbed.devices.keys())]:
                 software_version = cdp_object["index"][index]["software_version"]  
                 nodeName = cdp_object['index'][index]['device_id'].split(".")[0]
-                Switching_Network(nodeName,cdp_object['index'][index],parent=tree)
+                new_node = Switching_Network(nodeName,{},parent=tree)
                 try: 
                     ip_address = list(cdp_object['index'][index]["management_addresses"].keys())[0]
                 except:
                     ip_address = ""
                     print(f"{cdp_object['index'][index]['device_id']} does not have a IP address!!!------------------------<<<<<<<<<<<<")
                 my_os = "ios" if re.search("ios",software_version,re.IGNORECASE) else software_version.split(",")[0]
+                new_node.switch_info['management_address'] = ip_address
+                new_node.switch_info['chassis'] = cdp_object['index'][index]["platform"]
                 new_device = Device(cdp_object['index'][index]['device_id'].split(".")[0],
                                          os = my_os,
                                          connections = {'cli':
@@ -132,9 +138,12 @@ class Crawl_create:
             device = device.split(".")[0]
             if device not in self.visited_switches:
                 tree = self._search_within(tree.root,device)
-                cdp, testbed = self._get_cdp_info(testbed,device)
-                if cdp:
+                cdp, testbed, version = self._get_cdp_info(testbed,device)
+                if cdp and version:
                     testbed,tree = self._add_cdp_device_to_testbed(cdp,testbed, device ,tree)
+                    tree.switch_info["chassis"] = version['version']["chassis"]
+                    tree.switch_info["software_version"] = version['version']['version']
+                    tree.switch_info["SN"] = version['version']['chassis_sn']
 
 
                 #Go down one level in the search tree
@@ -190,8 +199,8 @@ class Crawl_create:
         dot = DotExporter(self.top,edgeattrfunc=edge_attribute,
                           nodenamefunc=node_get_name,
                           nodeattrfunc=lambda node: "shape=box")
-        dot.to_dotfile("network.dot")
-        dot.to_picture("network.png")
+        dot.to_dotfile(f"{test_bed_name}.dot")
+        dot.to_picture(f"{test_bed_name}.png")
 
 if __name__ == "__main__":
     fire.Fire(Crawl_create)
