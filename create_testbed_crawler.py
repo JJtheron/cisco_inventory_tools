@@ -2,6 +2,7 @@ from genie.testbed import load
 from pyats_genie_command_parse import GenieCommandParse
 from pyats.topology import Testbed, loader, Device, Interface, Link
 from pyats.utils.secret_strings import SecretString
+from pyats.topology.exceptions import DuplicateDeviceError
 import pprint
 import yaml
 import sys
@@ -27,7 +28,6 @@ class Switching_Network(Switch,NodeMixin):
             self.children = children
     
 def edge_attribute(node,child):
-
     return 'label="%s->%s"' % (child.switch_info['local_interface'],child.switch_info['port_id'])
 
 def node_get_name(node):
@@ -106,27 +106,30 @@ class Crawl_create:
     def _add_cdp_device_to_testbed(self, cdp_object,testbed, device,tree):
         ip_address = ""
         for index in cdp_object['index']:
-            if cdp_object['index'][index]['device_id'].split(".")[0] not in [i.split(".")[0] for i in list(testbed.devices.keys())]:
-                software_version = cdp_object["index"][index]["software_version"]  
-                nodeName = cdp_object['index'][index]['device_id'].split(".")[0]
-                new_node = Switching_Network(nodeName,{},parent=tree)
-                try: 
-                    ip_address = list(cdp_object['index'][index]["management_addresses"].keys())[0]
-                except:
-                    ip_address = ""
-                    print(f"{cdp_object['index'][index]['device_id']} does not have a IP address!!!------------------------<<<<<<<<<<<<")
-                my_os = "ios" if re.search("ios",software_version,re.IGNORECASE) else software_version.split(",")[0]
-                new_node.switch_info['management_address'] = ip_address
-                new_node.switch_info['chassis'] = cdp_object['index'][index]["platform"]
-                new_device = Device(cdp_object['index'][index]['device_id'].split(".")[0],
-                                         os = my_os,
-                                         connections = {'cli':
-                                                        {'protocol':'ssh',
-                                                      'ip' : ip_address}},
-                                        credentials = testbed.devices[device].credentials,
-                                        )
-                if ip_address:
+#            if cdp_object['index'][index]['device_id'].split(".")[0] not in [i.split(".")[0] for i in list(testbed.devices.keys())]:
+            software_version = cdp_object["index"][index]["software_version"]  
+            nodeName = cdp_object['index'][index]['device_id'].split(".")[0]
+            new_node = Switching_Network(nodeName,{},parent=tree)
+            try: 
+                ip_address = list(cdp_object['index'][index]["management_addresses"].keys())[0]
+            except:
+                ip_address = ""
+                print(f"{cdp_object['index'][index]['device_id']} does not have a IP address!!!------------------------<<<<<<<<<<<<")
+            my_os = "ios" if re.search("ios",software_version,re.IGNORECASE) else software_version.split(",")[0]
+            new_node.switch_info['management_addresses'] = ip_address
+            new_node.switch_info['chassis'] = cdp_object['index'][index]["platform"]
+            new_device = Device(cdp_object['index'][index]['device_id'].split(".")[0],
+                                     os = my_os,
+                                     connections = {'cli':
+                                                    {'protocol':'ssh',
+                                                  'ip' : ip_address}},
+                                    credentials = testbed.devices[device].credentials,
+                                    )
+            if ip_address:
+                try:
                     testbed.add_device(new_device)
+                except (DuplicateDeviceError):
+                    pass
         return testbed,tree
 #TODO: LLDP crawler
 
@@ -199,8 +202,8 @@ class Crawl_create:
         dot = DotExporter(self.top,edgeattrfunc=edge_attribute,
                           nodenamefunc=node_get_name,
                           nodeattrfunc=lambda node: "shape=box")
-        dot.to_dotfile(f"{test_bed_name}.dot")
-        dot.to_picture(f"{test_bed_name}.png")
+        dot.to_dotfile(f"{self.testbed.name}.dot")
+        dot.to_picture(f"{self.testbed.name}.png")
 
 if __name__ == "__main__":
     fire.Fire(Crawl_create)
