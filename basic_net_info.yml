@@ -10,11 +10,14 @@
   vars:
     ansible_become_password: "{{enpassword}}"
     location: "Cottage"
+    ansible_network_os: cisco.ios.ios
   tasks:
 
     - name: Get config for Ios devices
       cisco.ios.ios_facts:
-        gather_subset: all 
+        gather_subset: all
+        gather_network_resources: all
+      tags: info
 
     - name: Save the Config
       ansible.builtin.lineinfile:
