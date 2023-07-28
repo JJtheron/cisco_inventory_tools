@@ -9,6 +9,9 @@ import traceback
 import re
 import fire
 import getpass
+import networkx as nx
+import matplotlib.pyplot as plt
+
 class Crawl_create:
     def __init__(self,test_bed_name = "default", os="ios", user = "", password = "", device_name = "first_device", ip_address = "", protocol = "ssh", port = "22"):
         if not user:
@@ -29,7 +32,9 @@ class Crawl_create:
                                 "port":port
         }}))
         self.visited_switches = []
-        self.__cdp_crawler(self.testbed)    
+        self.graph = nx.Graph()
+        self.__cdp_crawler(self.testbed)
+
 #functions for crawling through environment using cdp
 #-----------------------------------------------------------------------------------------------------------------
 #VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
@@ -56,23 +61,25 @@ class Crawl_create:
     def _add_cdp_device_to_testbed(self, cdp_object,testbed, device):
         ip_address = ""
         for index in cdp_object['index']:
-            if cdp_object['index'][index]['device_id'].split(".")[0] not in [i.split(".")[0] for i in list(testbed.devices.keys())]:
-                software_version = cdp_object["index"][index]["software_version"]  
-                try: 
-                    ip_address = list(cdp_object['index'][index]["management_addresses"].keys())[0]
-                except:
-                    ip_address = ""
-                    print(f"{cdp_object['index'][index]['device_id']} does not have a IP address!!!------------------------<<<<<<<<<<<<")
-                my_os = "ios" if re.search("ios",software_version,re.IGNORECASE) else software_version.split(",")[0]
-                new_device = Device(cdp_object['index'][index]['device_id'].split(".")[0],
-                                         os = my_os,
-                                         connections = {'cli':
-                                                        {'protocol':'ssh',
-                                                      'ip' : ip_address}},
-                                        credentials = testbed.devices[device].credentials,
-                                        )
-                if ip_address:
-                    testbed.add_device(new_device)
+            new_device_name =  cdp_object['index'][index]['device_id'].split(".")[0] 
+            software_version = cdp_object["index"][index]["software_version"]
+            edge_label =  f"{cdp_object['index'][index]['local_interface']}->{cdp_object['index'][index]['port_id']}"
+            try: 
+                ip_address = list(cdp_object['index'][index]["management_addresses"].keys())[0]
+            except:
+                ip_address = ""
+                print(f"{cdp_object['index'][index]['device_id']} does not have a IP address!!!------------------------<<<<<<<<<<<<")
+            my_os = "ios" if re.search("ios",software_version,re.IGNORECASE) else software_version.split(",")[0]
+            self.graph.add_edge(device,new_device_name,label = edge_label)
+            new_device = Device(new_device_name,
+                                     os = my_os,
+                                     connections = {'cli':
+                                                    {'protocol':'ssh',
+                                                  'ip' : ip_address}},
+                                    credentials = testbed.devices[device].credentials,
+                                    )
+            if ip_address and new_device_name not in [i.split(".")[0] for i in list(testbed.devices.keys())]:
+                testbed.add_device(new_device)
         return testbed
 #TODO: LLDP crawler
 
@@ -128,12 +135,28 @@ class Crawl_create:
             except:
                 my_ip = self.testbed.devices[device].connections.cli.ip
             ansible_hosts["all"]["hosts"][device] = {"ansible_host": my_ip }
-    
-    
-
         with open(f"ansible_{self.testbed.name}.yml", 'w') as tbfile:
             yaml.dump(ansible_hosts,tbfile)
         return ansible_hosts
+    
+    def print_map(self):
+        options = {
+                "font_size": 8,
+                "node_size": 300,
+                "node_color": "white",
+                "edgecolors": "black",
+                "linewidths": 1,
+                "width": 5,
+                "with_labels": True
+        }
+        pos = nx.spring_layout(self.graph)
+        plt.figure(figsize=(24,24))
+        edge_labels = dict([((n1, n2), d['label'])
+                                                for n1, n2, d in self.graph.edges(data=True)])
+        nx.draw_networkx(self.graph,pos,**options)
+        nx.draw_networkx_edge_labels(self.graph,pos,edge_labels=edge_labels)
+        plt.savefig(f"{self.testbed.name}.png")
+
     
 if __name__ == "__main__":
     fire.Fire(Crawl_create)
