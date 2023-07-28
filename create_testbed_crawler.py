@@ -14,7 +14,7 @@ import getpass
 from anytree.exporter import DotExporter
 from anytree.resolver import Resolver
 from anytree import NodeMixin
-
+import Networkx
 class Switch(object):
      switch_info = {}
      name = ""
@@ -27,17 +27,32 @@ class Switching_Network(Switch,NodeMixin):
         if children:
             self.children = children
     
+    def _pre_detach(self,parent):
+        return
+    def __detach(self,parent):
+        return
+    def _post_detatch(self,parent):
+        return
+    
 def edge_attribute(node,child):
     return 'label="%s->%s"' % (child.switch_info['local_interface'],child.switch_info['port_id'])
 
 def node_get_name(node):
     if node.switch_info:
-       return f""" {node.name}
-{node.switch_info['chassis']}
+        try:
+           info = f""" {node.name}
 {node.switch_info['management_addresses']}
+{node.switch_info['chassis']}
 {node.switch_info['software_version']}
 {node.switch_info['SN']}
                 """
+        except:
+           info = f""" {node.name}
+{node.switch_info['chassis']}
+{node.switch_info['software_version']}
+{node.switch_info['SN']}
+                """
+        return info
     else:
        return node.name
 
@@ -101,23 +116,47 @@ class Crawl_create:
             newTree =  self._search_within(child,device)
             if newTree:
                 return newTree
-    
+        
 
     def _add_cdp_device_to_testbed(self, cdp_object,testbed, device,tree):
         ip_address = ""
+        now_top = tree
         for index in cdp_object['index']:
 #            if cdp_object['index'][index]['device_id'].split(".")[0] not in [i.split(".")[0] for i in list(testbed.devices.keys())]:
             software_version = cdp_object["index"][index]["software_version"]  
             nodeName = cdp_object['index'][index]['device_id'].split(".")[0]
-            new_node = Switching_Network(nodeName,{},parent=tree)
+               
             try: 
                 ip_address = list(cdp_object['index'][index]["management_addresses"].keys())[0]
             except:
                 ip_address = ""
                 print(f"{cdp_object['index'][index]['device_id']} does not have a IP address!!!------------------------<<<<<<<<<<<<")
+              # check if node exists
+            # if it does then add tree as a child of the current node
+            already_node = self._search_within(tree.root,nodeName)
+            if already_node:
+                already_node.switch_info['management_addresses'] = ip_address
+                try:
+                    if nodeName != tree.parent.name:
+                        print(f"{already_node.name}<-{tree.name}<-{tree.parent.name} <<<<<<<<<<<<<<{already_node.parent.name}<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<")
+                        new_node = Switching_Network(nodeName,{},parent=tree)
+                        new_node.switch_info['management_addresses'] = already_node.switch_info['management_addresses']
+                        new_node.switch_info['chassis'] = already_node.switch_info['chassis'] 
+                        new_node.switch_info['software_version'] = already_node.switch_info['software_version'] 
+                        new_node.switch_info['SN'] = already_node.switch_info['SN'] 
+                        new_node.switch_info['local_interface'] = already_node.switch_info['local_interface'] 
+                        new_node.switch_info['port_id'] = already_node.switch_info['port_id']
+                except (AttributeError):
+                    pass
+            else:
+                new_node = Switching_Network(nodeName,{},parent=tree)
+                new_node.switch_info['management_addresses'] = ip_address
+                new_node.switch_info['chassis'] = cdp_object['index'][index]["platform"]
+                new_node.switch_info['software_version'] = software_version 
+                new_node.switch_info['SN'] = ""
+                new_node.switch_info['local_interface'] = cdp_object['index'][index]['local_interface']
+                new_node.switch_info['port_id'] = cdp_object['index'][index]['port_id'] 
             my_os = "ios" if re.search("ios",software_version,re.IGNORECASE) else software_version.split(",")[0]
-            new_node.switch_info['management_addresses'] = ip_address
-            new_node.switch_info['chassis'] = cdp_object['index'][index]["platform"]
             new_device = Device(cdp_object['index'][index]['device_id'].split(".")[0],
                                      os = my_os,
                                      connections = {'cli':
@@ -133,7 +172,7 @@ class Crawl_create:
         return testbed,tree
 #TODO: LLDP crawler
 
-#CDP crawler:
+#CD Pcrawler:
     def cdp_crawler(self,testbed,tree):
         dev_copy = testbed.devices.copy()
         cdp = {}
@@ -143,6 +182,8 @@ class Crawl_create:
                 tree = self._search_within(tree.root,device)
                 cdp, testbed, version = self._get_cdp_info(testbed,device)
                 if cdp and version:
+                    #the key to creating a loop in the diagram is to name 2 nodes exactly the same
+                    #I will need to lots of cleanup once I get this thing to work
                     testbed,tree = self._add_cdp_device_to_testbed(cdp,testbed, device ,tree)
                     tree.switch_info["chassis"] = version['version']["chassis"]
                     tree.switch_info["software_version"] = version['version']['version']
@@ -182,6 +223,7 @@ class Crawl_create:
         with open(f"{self.testbed.name}.yml", 'w') as tbfile:
             yaml.dump(topology_dict,tbfile)
         return topology_dict
+    
 
     def create_hosts_file_ansible(self):
         ansible_hosts = {"all":{"hosts":{}}}
@@ -204,6 +246,12 @@ class Crawl_create:
                           nodeattrfunc=lambda node: "shape=box")
         dot.to_dotfile(f"{self.testbed.name}.dot")
         dot.to_picture(f"{self.testbed.name}.png")
+
+def create_all_documentation(self):
+        self.create_ats_testbed_file()
+        self.create_hosts_file_ansible()
+        self.print_out_map()
+
 
 if __name__ == "__main__":
     fire.Fire(Crawl_create)
