@@ -58,12 +58,20 @@ class Crawl_create:
 
         return cdp_parsed, testbed
 
+    def __shorten_edge_name(self,port):
+        portType = port[:2]
+        port_number = re.findall(r"[0-9]/[0-9]/[0-9]|[0-9]/[0-9]",port)[0]
+        return f"{portType}{port_number}"
+
+
     def _add_cdp_device_to_testbed(self, cdp_object,testbed, device):
         ip_address = ""
         for index in cdp_object['index']:
             new_device_name =  cdp_object['index'][index]['device_id'].split(".")[0] 
             software_version = cdp_object["index"][index]["software_version"]
-            edge_label =  f"{cdp_object['index'][index]['local_interface']}->{cdp_object['index'][index]['port_id']}"
+            local_port = self.__shorten_edge_name(cdp_object['index'][index]['local_interface'])
+            remote_port = self.__shorten_edge_name(cdp_object['index'][index]['port_id'])
+            edge_label =  f"{local_port}->{remote_port}"
             try: 
                 ip_address = list(cdp_object['index'][index]["management_addresses"].keys())[0]
             except:
@@ -149,7 +157,7 @@ class Crawl_create:
                 "width": 5,
                 "with_labels": True
         }
-        pos = nx.spring_layout(self.graph)
+        pos = nx.planar_layout(self.graph)
         plt.figure(figsize=(24,24))
         edge_labels = dict([((n1, n2), d['label'])
                                                 for n1, n2, d in self.graph.edges(data=True)])
