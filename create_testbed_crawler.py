@@ -32,7 +32,7 @@ class Crawl_create:
                                 "port":port
         }}))
         self.visited_switches = []
-        self.graph = nx.Graph()
+        self.graph = nx.MultiGraph()
         self.__cdp_crawler(self.testbed)
 
 #functions for crawling through environment using cdp
@@ -68,6 +68,12 @@ class Crawl_create:
         ip_address = ""
         for index in cdp_object['index']:
             new_device_name =  cdp_object['index'][index]['device_id'].split(".")[0] 
+            new_device_name_g = new_device_name
+            if len(new_device_name.split("-")) > 1:
+                 new_device_name_g = new_device_name.split("-")[1]
+            device_g = device
+            if len(device.split("-")) > 1:
+                 device_g = device.split("-")[1]
             software_version = cdp_object["index"][index]["software_version"]
             local_port = self.__shorten_edge_name(cdp_object['index'][index]['local_interface'])
             remote_port = self.__shorten_edge_name(cdp_object['index'][index]['port_id'])
@@ -78,7 +84,7 @@ class Crawl_create:
                 ip_address = ""
                 print(f"{cdp_object['index'][index]['device_id']} does not have a IP address!!!------------------------<<<<<<<<<<<<")
             my_os = "ios" if re.search("ios",software_version,re.IGNORECASE) else software_version.split(",")[0]
-            self.graph.add_edge(device,new_device_name,label = edge_label)
+            self.graph.add_edge(device_g,new_device_name_g,label = edge_label)
             new_device = Device(new_device_name,
                                      os = my_os,
                                      connections = {'cli':
@@ -147,17 +153,17 @@ class Crawl_create:
             yaml.dump(ansible_hosts,tbfile)
         return ansible_hosts
     
-    def print_map(self):
+    def print_map(self,serial_file):
         options = {
                 "font_size": 8,
-                "node_size": 300,
+                "node_size": 3000,
                 "node_color": "white",
                 "edgecolors": "black",
                 "linewidths": 1,
                 "width": 5,
                 "with_labels": True
         }
-        pos = nx.planar_layout(self.graph)
+        pos = nx.spring_layout(self.graph)
         plt.figure(figsize=(24,24))
         edge_labels = dict([((n1, n2), d['label'])
                                                 for n1, n2, d in self.graph.edges(data=True)])
