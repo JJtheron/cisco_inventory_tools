@@ -12,13 +12,15 @@ import getpass
 import networkx as nx
 import matplotlib.pyplot as plt
 import pickle
+from pyats.utils.secret_strings import SecretString
+
 
 class Crawl_create:
     def __init__(self,test_bed_name = "default", os="ios", user = "", password = "", device_name = "first_device", ip_address = "", protocol = "ssh", port = "22"):
         if not user:
             user = input("Username: ")
         if not password:
-            password = getpass.getpass(prompt="password: ")
+            password = SecretString.from_plaintext(getpass.getpass(prompt="password: "))
         self.user = user
         self.password = password
         self.testbed = Testbed(test_bed_name,
