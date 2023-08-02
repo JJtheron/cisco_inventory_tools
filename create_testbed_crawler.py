@@ -11,6 +11,7 @@ import fire
 import getpass
 import networkx as nx
 import matplotlib.pyplot as plt
+import pickle
 
 class Crawl_create:
     def __init__(self,test_bed_name = "default", os="ios", user = "", password = "", device_name = "first_device", ip_address = "", protocol = "ssh", port = "22"):
@@ -40,10 +41,12 @@ class Crawl_create:
 #VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
     def _get_cdp_info(self,testbed,device):
         command = 'show cdp nei detail'
+        command2 = "show version"
         try:
             dev = testbed.devices[device]
             dev.connect(learn_hostname=True,goto_enable=False,init_exec_commands=[],init_config_commands=[])
             cdp = dev.default.execute(command)
+            version =  dev.default.execute(command2)
             dev.disconnect()
         except Exception as e:
             sys.stderr.write(f"Could not connect to device {device} Error is {e}")  
@@ -54,17 +57,26 @@ class Crawl_create:
         parse_object = GenieCommandParse(nos=dev.os)
         testbed.devices[dev.hostname] = testbed.devices.pop(device)
         cdp_parsed =  parse_object.parse_string(show_command = command, show_output_data = cdp)
+        version_parsed =  parse_object.parse_string(show_command = command2, show_output_data = version)
         self.visited_switches.append(dev.hostname)
 
-        return cdp_parsed, testbed
+        return cdp_parsed, testbed, version_parsed
 
     def __shorten_edge_name(self,port):
         portType = port[:2]
         port_number = re.findall(r"[0-9]/[0-9]/[0-9]|[0-9]/[0-9]",port)[0]
         return f"{portType}{port_number}"
 
+    def __edges_exists(self,local_port,remote_port,device_g,new_device_name_g):
+        if (device_g, new_device_name_g) in self.graph.edges:
+            for label in self.graph.adj[device_g][new_device_name_g]:
+                label1 = self.graph.adj[device_g][new_device_name_g][label]["label"].split("->")[1]
+                label2 =  self.graph.adj[device_g][new_device_name_g][label]["label"].split("->")[0]
+                if local_port == label1 and remote_port == label2:
+                    return True
+        return False
 
-    def _add_cdp_device_to_testbed(self, cdp_object,testbed, device):
+    def _add_cdp_device_to_testbed(self, cdp_object,testbed, device,version):
         ip_address = ""
         for index in cdp_object['index']:
             new_device_name =  cdp_object['index'][index]['device_id'].split(".")[0] 
@@ -84,7 +96,14 @@ class Crawl_create:
                 ip_address = ""
                 print(f"{cdp_object['index'][index]['device_id']} does not have a IP address!!!------------------------<<<<<<<<<<<<")
             my_os = "ios" if re.search("ios",software_version,re.IGNORECASE) else software_version.split(",")[0]
-            self.graph.add_edge(device_g,new_device_name_g,label = edge_label)
+            if not self.__edges_exists(local_port,remote_port,device_g,new_device_name_g):
+                self.graph.add_edge(device_g,new_device_name_g,label = edge_label)
+                self.graph.add_node(new_device_name_g,shape="box")
+            self.graph.add_node(device_g,shape="box",label=f"""{device_g}
+{testbed.devices[device].connections['cli']['ip']}
+{version['version']['chassis']}
+{version['version']['chassis_sn']}
+{version['version']['version']}""")
             new_device = Device(new_device_name,
                                      os = my_os,
                                      connections = {'cli':
@@ -104,9 +123,9 @@ class Crawl_create:
         for device in dev_copy:
             device = device.split(".")[0]
             if device not in self.visited_switches:
-                cdp, testbed = self._get_cdp_info(testbed,device)
+                cdp, testbed, version = self._get_cdp_info(testbed,device)
                 if cdp:
-                    testbed = self._add_cdp_device_to_testbed(cdp,testbed, device)
+                    testbed = self._add_cdp_device_to_testbed(cdp,testbed, device,version)
 
 
                 self.__cdp_crawler(testbed)
@@ -153,24 +172,38 @@ class Crawl_create:
             yaml.dump(ansible_hosts,tbfile)
         return ansible_hosts
     
-    def print_map(self,serial_file):
-        options = {
-                "font_size": 8,
-                "node_size": 3000,
-                "node_color": "white",
-                "edgecolors": "black",
-                "linewidths": 1,
-                "width": 5,
-                "with_labels": True
-        }
-        pos = nx.spring_layout(self.graph)
-        plt.figure(figsize=(24,24))
-        edge_labels = dict([((n1, n2), d['label'])
-                                                for n1, n2, d in self.graph.edges(data=True)])
-        nx.draw_networkx(self.graph,pos,**options)
-        nx.draw_networkx_edge_labels(self.graph,pos,edge_labels=edge_labels)
-        plt.savefig(f"{self.testbed.name}.png")
+    def print_map(self,serial_file=""):
+        if serial_file:
+            f=open(serial_file,'rb')
+            graph = pickle.load(f)
+            viz = nx.nx_agraph.to_agraph(graph)
+            viz.draw(f"test.png",prog="dot")
+        else:
+            with open(f"{self.testbed.name}.pickle",'wb') as f:
+                pickle.dump(self.graph,f)
+            viz = nx.nx_agraph.to_agraph(self.graph)
+            viz.draw(f"{self.testbed.name}.png",prog="dot")
+
+#        options = {
+#                "font_size": 8,
+#                "node_size": 3000,
+#                "node_color": "white",
+#                "edgecolors": "black",
+#                "linewidths": 1,
+#                "width": 5,
+#                "with_labels": True
+#        }
+#        pos = nx.spring_layout(self.graph)
+#        plt.figure(figsize=(24,24))
+#        edge_labels = dict([((n1, n2), d['label'])
+#                                                for n1, n2, d in self.graph.edges(data=True)])
+#        nx.draw_networkx(self.graph,pos,**options)
+#        nx.draw_networkx_edge_labels(self.graph,pos,edge_labels=edge_labels)
+
+
+       # plt.savefig(f"{self.testbed.name}.png")
 
     
 if __name__ == "__main__":
+    #Crawl_create.print_map(serial_file="CottageGrove.pickle")    
     fire.Fire(Crawl_create)
