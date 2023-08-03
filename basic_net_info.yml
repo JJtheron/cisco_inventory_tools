@@ -10,6 +10,8 @@
   vars:
     ansible_become_password: "{{enpassword}}"
     location: "Cottage"
+    ansible_network_os: cisco.ios.ios
+
   tasks:
 
     - name: Get config for Ios devices
