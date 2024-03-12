@@ -1,8 +1,5 @@
-from genie.testbed import load
 from pyats_genie_command_parse import GenieCommandParse
 from pyats.topology import Testbed, loader, Device, Interface, Link
-from pyats.utils.secret_strings import SecretString
-import pprint
 import yaml
 import sys
 import traceback
@@ -27,7 +24,9 @@ class Crawl_create:
                                credentials = {"default":{
                                                 "username":user,
                                                 "password":password
-                               } })
+                               },
+
+                               })
 
         self.testbed.add_device(Device(device_name,os=os,connections={"cli":{
                                 "protocol":protocol,
@@ -54,7 +53,7 @@ class Crawl_create:
             sys.stderr.write(f"Could not connect to device {device} Error is {e}")  
             self.visited_switches.append(device.split(".")[0])
             traceback.print_exc() 
-            return {},testbed
+            return {},testbed,{}
             
         parse_object = GenieCommandParse(nos=dev.os)
         testbed.devices[dev.hostname] = testbed.devices.pop(device)
@@ -65,9 +64,12 @@ class Crawl_create:
         return cdp_parsed, testbed, version_parsed
 
     def __shorten_edge_name(self,port):
-        portType = port[:2]
-        port_number = re.findall(r"[0-9]/[0-9]/[0-9]|[0-9]/[0-9]",port)[0]
-        return f"{portType}{port_number}"
+        try:
+            portType = port[:2]
+            port_number = re.findall(r"[0-9]/[0-9]/[0-9]*|[0-9]/[0-9]*|[0-9][0-9]*",port)[0]
+            return f"{portType}{port_number}"
+        except:
+            return port
 
     def __edges_exists(self,local_port,remote_port,device_g,new_device_name_g):
         if (device_g, new_device_name_g) in self.graph.edges:
@@ -84,10 +86,10 @@ class Crawl_create:
             new_device_name =  cdp_object['index'][index]['device_id'].split(".")[0] 
             new_device_name_g = new_device_name
             if len(new_device_name.split("-")) > 1:
-                 new_device_name_g = new_device_name.split("-")[1]
+                new_device_name_g = new_device_name[new_device_name.find("-"):].lstrip("-")
             device_g = device
             if len(device.split("-")) > 1:
-                 device_g = device.split("-")[1]
+                device_g = device[device.find("-"):].lstrip("-")
             software_version = cdp_object["index"][index]["software_version"]
             local_port = self.__shorten_edge_name(cdp_object['index'][index]['local_interface'])
             remote_port = self.__shorten_edge_name(cdp_object['index'][index]['port_id'])
@@ -98,23 +100,26 @@ class Crawl_create:
                 ip_address = ""
                 print(f"{cdp_object['index'][index]['device_id']} does not have a IP address!!!------------------------<<<<<<<<<<<<")
             my_os = "ios" if re.search("ios",software_version,re.IGNORECASE) else software_version.split(",")[0]
-            if not self.__edges_exists(local_port,remote_port,device_g,new_device_name_g):
-                self.graph.add_edge(device_g,new_device_name_g,label = edge_label)
-                self.graph.add_node(new_device_name_g,shape="box")
-            self.graph.add_node(device_g,shape="box",label=f"""{device_g}
+            if cdp_object['index'][index]['capabilities'].lower().find("switch")>=0: # and cdp_object['index'][index]['capabilities'].lower().find("router")<0:
+                if not self.__edges_exists(local_port,remote_port,device_g,new_device_name_g):
+                    self.graph.add_edge(device_g,new_device_name_g,label = edge_label)
+                    self.graph.add_node(new_device_name_g,shape="box",label=f"""{new_device_name_g}
+{cdp_object['index'][index]['platform']}""")
+                    
+                self.graph.add_node(device_g,shape="box",label=f"""{device_g}
 {testbed.devices[device].connections['cli']['ip']}
 {version['version']['chassis']}
 {version['version']['chassis_sn']}
 {version['version']['version']}""")
-            new_device = Device(new_device_name,
-                                     os = my_os,
-                                     connections = {'cli':
-                                                    {'protocol':'ssh',
-                                                  'ip' : ip_address}},
-                                    credentials = testbed.devices[device].credentials,
-                                    )
-            if ip_address and new_device_name not in [i.split(".")[0] for i in list(testbed.devices.keys())]:
-                testbed.add_device(new_device)
+                new_device = Device(new_device_name,
+                                         os = my_os,
+                                         connections = {'cli':
+                                                        {'protocol':'ssh',
+                                                      'ip' : ip_address}},
+                                        credentials = testbed.devices[device].credentials,
+                                        )
+                if ip_address and new_device_name not in [i.split(".")[0] for i in list(testbed.devices.keys())]:
+                    testbed.add_device(new_device)
         return testbed
 #TODO: LLDP crawler
 
