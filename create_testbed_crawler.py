@@ -35,33 +35,37 @@ class Crawl_create:
         }}))
         self.visited_switches = []
         self.graph = nx.MultiGraph()
+        self.spanning_tree_dic = {}
         self.__cdp_crawler(self.testbed)
 
 #functions for crawling through environment using cdp
 #-----------------------------------------------------------------------------------------------------------------
 #VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
-    def _get_cdp_info(self,testbed,device):
+    def _get_info(self,testbed,device):
         command = 'show cdp nei detail'
         command2 = "show version"
+        command3 = "show spanning-tree"
         try:
             dev = testbed.devices[device]
             dev.connect(learn_hostname=True,goto_enable=False,init_exec_commands=[],init_config_commands=[])
             cdp = dev.default.execute(command)
             version =  dev.default.execute(command2)
+            spanning_tree = dev.default.execute(command3)
             dev.disconnect()
         except Exception as e:
             sys.stderr.write(f"Could not connect to device {device} Error is {e}")  
             self.visited_switches.append(device.split(".")[0])
             traceback.print_exc() 
-            return {},testbed,{}
+            return {},testbed,{},{}
             
         parse_object = GenieCommandParse(nos=dev.os)
         testbed.devices[dev.hostname] = testbed.devices.pop(device)
         cdp_parsed =  parse_object.parse_string(show_command = command, show_output_data = cdp)
         version_parsed =  parse_object.parse_string(show_command = command2, show_output_data = version)
+        spanning_tree_parsed = parse_object.parse_string(show_command = command3, show_output_data = spanning_tree)
         self.visited_switches.append(dev.hostname)
 
-        return cdp_parsed, testbed, version_parsed
+        return cdp_parsed, testbed, version_parsed, spanning_tree_parsed
 
     def __shorten_edge_name(self,port):
         try:
@@ -80,7 +84,7 @@ class Crawl_create:
                     return True
         return False
 
-    def _add_cdp_device_to_testbed(self, cdp_object,testbed, device,version):
+    def _add_device(self, cdp_object,testbed, device,version, spt_data):
         ip_address = ""
         for index in cdp_object['index']:
             new_device_name =  cdp_object['index'][index]['device_id'].split(".")[0] 
@@ -102,7 +106,7 @@ class Crawl_create:
             my_os = "ios" if re.search("ios",software_version,re.IGNORECASE) else software_version.split(",")[0]
             if cdp_object['index'][index]['capabilities'].lower().find("switch")>=0: # and cdp_object['index'][index]['capabilities'].lower().find("router")<0:
                 if not self.__edges_exists(local_port,remote_port,device_g,new_device_name_g):
-                    self.graph.add_edge(device_g,new_device_name_g,label = edge_label)
+                    self.graph.add_edge(device_g,new_device_name_g,label = edge_label,localPort=local_port,remotePort=remote_port)
                     self.graph.add_node(new_device_name_g,shape="box",label=f"""{new_device_name_g}
 {cdp_object['index'][index]['platform']}""")
                     
@@ -110,7 +114,7 @@ class Crawl_create:
 {testbed.devices[device].connections['cli']['ip']}
 {version['version']['chassis']}
 {version['version']['chassis_sn']}
-{version['version']['version']}""")
+{version['version']['version']}""", show_spanning=spt_data)
                 new_device = Device(new_device_name,
                                          os = my_os,
                                          connections = {'cli':
@@ -130,9 +134,9 @@ class Crawl_create:
         for device in dev_copy:
             device = device.split(".")[0]
             if device not in self.visited_switches:
-                cdp, testbed, version = self._get_cdp_info(testbed,device)
+                cdp, testbed, version, spt_data = self._get_info(testbed,device)
                 if cdp:
-                    testbed = self._add_cdp_device_to_testbed(cdp,testbed, device,version)
+                    testbed = self._add_device(cdp,testbed, device,version,spt_data)
 
 
                 self.__cdp_crawler(testbed)
@@ -191,24 +195,22 @@ class Crawl_create:
             viz = nx.nx_agraph.to_agraph(self.graph)
             viz.draw(f"{self.testbed.name}.png",prog="dot")
 
-#        options = {
-#                "font_size": 8,
-#                "node_size": 3000,
-#                "node_color": "white",
-#                "edgecolors": "black",
-#                "linewidths": 1,
-#                "width": 5,
-#                "with_labels": True
-#        }
-#        pos = nx.spring_layout(self.graph)
-#        plt.figure(figsize=(24,24))
-#        edge_labels = dict([((n1, n2), d['label'])
-#                                                for n1, n2, d in self.graph.edges(data=True)])
-#        nx.draw_networkx(self.graph,pos,**options)
-#        nx.draw_networkx_edge_labels(self.graph,pos,edge_labels=edge_labels)
+    def __vlan_insert(self,vlans_list, new_vlan):
+        if new_vlan in vlans_list:
+            return vlans_list
+        else:
+            return vlans_list.append(new_vlan)
+    # use graph iteration to find the structure of the spanning tree    
+    def process_spt_data(self):
+        # dictionary to look up brige to name
+        bridge_to_Name = {}
+        # root bridge
+        root_bridge = ""
+        # vlans
+        vlans = []
+        graphs = {}
+        return None
 
-
-       # plt.savefig(f"{self.testbed.name}.png")
 
     
 if __name__ == "__main__":
