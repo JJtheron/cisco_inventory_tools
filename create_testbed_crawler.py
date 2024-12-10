@@ -40,7 +40,7 @@ class Crawl_create:
 
 #functions for crawling through environment using cdp
 #-----------------------------------------------------------------------------------------------------------------
-#VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
+#VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
     def _get_info(self,testbed,device):
         command = 'show cdp nei detail'
         command2 = "show version"
@@ -104,7 +104,7 @@ class Crawl_create:
                 ip_address = ""
                 print(f"{cdp_object['index'][index]['device_id']} does not have a IP address!!!------------------------<<<<<<<<<<<<")
             my_os = "ios" if re.search("ios",software_version,re.IGNORECASE) else software_version.split(",")[0]
-            if cdp_object['index'][index]['capabilities'].lower().find("switch")>=0: # and cdp_object['index'][index]['capabilities'].lower().find("router")<0:
+            if cdp_object['index'][index]['capabilities'].lower().find("switch")>=0: #and cdp_object['index'][index]['capabilities'].lower().find("router")<0:
                 if not self.__edges_exists(local_port,remote_port,device_g,new_device_name_g):
                     self.graph.add_edge(device_g,new_device_name_g,label = edge_label,localPort=local_port,remotePort=remote_port)
                     self.graph.add_node(new_device_name_g,shape="box",label=f"""{new_device_name_g}
