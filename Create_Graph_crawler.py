@@ -67,7 +67,6 @@ class Crawl_create:
                 ip_address = list(cdp["index"][index]["entry_addresses"].keys())[0]
                 next_device = self._create_Testbed_device(cdp["index"][index]["device_id"], ip_address)
                 if not self.__visited(next_device,visited) and not self.__Test_is_router(cdp,index):
-                    ip_address = ""
                     cdp1, version1, vlanIP1, connected1 = self._get_cdp_info(next_device)
                     if connected1:
                         id = self._create_standard_name(version1["version"]["hostname"],ip_address)
