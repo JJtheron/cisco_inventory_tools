@@ -163,7 +163,7 @@ class Crawl_create:
         return f"{local_port}->{remote_port}", local_port, remote_port
     
     def __Test_is_router(self,cdp_object,index):
-        return "router" in cdp_object['index'][index]['capabilities'].lower() or "phone" in cdp_object['index'][index]['capabilities'].lower()
+        return "cloud managed ap" in cdp_object['index'][index]['platform'].lower() or "Polycom" in cdp_object['index'][index]['platform'].lower()
 #######################################################################################################################
 #vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv Output functions go here vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
 #######################################################################################################################
