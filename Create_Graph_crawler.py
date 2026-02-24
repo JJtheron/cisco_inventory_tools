@@ -47,6 +47,10 @@ class Crawl_create:
         return id
 
     def __visited(self,neighbor,visited):
+        print("--------------------------------------------------")
+        print(visited)
+        print(neighbor)
+        print("--------------------------------------------------")
         for visit in visited:
             try:
                 if visit == neighbor:
@@ -59,14 +63,15 @@ class Crawl_create:
         
     def __cdp_crawler(self,id,cdp, version, vlanIP, visited):
         if visited is None:
-            visited = set()
-        visited.add(id)
+            visited = []
         self._add_cdp_device_to_graph(id, cdp,version)
+        visited.append(id)
         for index in cdp["index"]:
             if len(list(cdp["index"][index]["entry_addresses"].keys())) > 0:
                 ip_address = list(cdp["index"][index]["entry_addresses"].keys())[0]
                 next_device = self._create_Testbed_device(cdp["index"][index]["device_id"], ip_address)
-                if not self.__visited(next_device,visited) and not self.__Test_is_router(cdp,index):
+                next_device_id = self._create_standard_name(cdp["index"][index]["device_id"].split(".")[0], ip_address)
+                if not self.__visited(next_device_id,visited) and not self.__Test_is_router(cdp,index):
                     cdp1, version1, vlanIP1, connected1 = self._get_cdp_info(next_device)
                     if connected1:
                         id = self._create_standard_name(version1["version"]["hostname"],ip_address)
@@ -94,7 +99,7 @@ class Crawl_create:
         command3 = "show ip interface"
         try:
             dev = device
-            dev.connect(learn_hostname=True,goto_enable=False,init_exec_commands=[],init_config_commands=[])
+            dev.connect(learn_hostname=True,goto_enable=False,init_exec_commands=[],init_config_commands=[],log_stdout=False)
             cdp = dev.default.execute(command)
             version =  dev.default.execute(command2)
             VlanIP = dev.default.execute(command3)
@@ -132,9 +137,8 @@ class Crawl_create:
             new_switch_id = self._create_standard_name(new_device_name,ip_address)
             if cdp_object['index'][index]['capabilities'].lower().find("switch")>=0 and not self.__Test_is_router(cdp_object,index):
                 if not self.__edges_exists(local_port,remote_port,id,new_switch_id):
-                    ## JJ was here
                     self.graph.add_edge(id,new_switch_id,label = edge_label)
-                    self.graph.add_node(new_switch_id,shape="box",label=f"""{new_switch_id}""",color="red")
+                    self.graph.add_node(new_switch_id,shape="box",label=f"""{new_switch_id}""",color="red",ip_add=ip_address,host=new_device_name)
 
 #########################################################################################
 #vvvvvvvvvvvvvvvvvvvvvvv Helper functions go here  vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
@@ -170,6 +174,29 @@ class Crawl_create:
     def print_map(self):
         viz = nx.nx_agraph.to_agraph(self.graph)
         viz.draw(f"{self.test_bed_name}.png",prog="dot")
+
+    def save_as_ansible(self):
+        hosts = {}
+        for node in self.graph.nodes():
+            node_data = self.graph.nodes[node]
+            host_entry = {
+                'ansible_host': node_data.get('ip_add', ''),
+                'ansible_connection': 'network_cli',
+                'ansible_network_os': 'ios'
+            }
+            hosts[node_data.get('host', node)] = host_entry
+
+        testbed = {
+            'all': {
+                'hosts': hosts
+            }
+        }
+
+        with open(f"{self.test_bed_name}_inventory.yml", 'w') as f:
+            yaml.dump(testbed, f, default_flow_style=False)
+
+        return testbed
+
 
 if __name__ == "__main__":    
     fire.Fire(Crawl_create)
