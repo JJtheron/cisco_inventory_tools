@@ -142,30 +142,6 @@ class Crawl_create:
 #functions for crawling through environment using cdp
 #-----------------------------------------------------------------------------------------------------------------
 #^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-    def create_ats_testbed_file(self):
-        first_device = list(self.testbed.devices.keys())[0]
-        topology_dict = {"devices":{},"testbed":{
-            "name": self.testbed.name,
-            "credentials":{"default":{
-                                      "username":self.user,
-                                      "password":SecretString.from_plaintext(self.password).data
-                        }}}}
-        for device in self.testbed.devices:
-            try:
-                my_ip = str(self.testbed.devices[device].connections.cli.ip)
-            except:
-                my_ip = self.testbed.devices[device].connections.cli.ip
-            topology_dict["devices"][device] = {
-                "connections":{"cli":{
-                            "ip": my_ip,
-                            "protocol":"ssh"
-                }},
-                        "os":self.testbed.devices[device].os,
-                    }
-            
-        with open(f"{self.testbed.name}.yml", 'w') as tbfile:
-            yaml.dump(topology_dict,tbfile)
-        return topology_dict
 
     def create_hosts_file_ansible(self):
         ansible_hosts = {"all":{"hosts":{}}}

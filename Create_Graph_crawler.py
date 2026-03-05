@@ -13,7 +13,7 @@ from pyats.utils.secret_strings import SecretString
 
 
 class Crawl_create:
-    def __init__(self,test_bed_name = "default", os="ios", user = "", password = "", device_name = "first_device", ip_address = ""):
+    def __init__(self,test_bed_name = "default", os="ios", user = "", password = "", device_name = "first_device", ip_address = "", load_pickle = False):
         if not user:
             user = input("Username: ")
         if not password:
@@ -23,7 +23,11 @@ class Crawl_create:
         self.password = password
         self.graph = nx.MultiGraph()
         self.test_bed_name = test_bed_name
-        self.__explore_first_switch(device_name,[ip_address])
+        if load_pickle:
+            self.load_graph_pickle()
+            self.print_map()
+        else:
+            self.__explore_first_switch(device_name,[ip_address])
     
     def __explore_first_switch(self, device_name, ip_address):
         cdp = {}
@@ -40,25 +44,6 @@ class Crawl_create:
         if connected:
             id = self._create_standard_name(version["version"]["hostname"],ip_working)
             self.__cdp_crawler(id,cdp,version,vlanIP,None)
-    
-    def _create_standard_name(self,current_switch_name,ip_working):
-        name_standard  = current_switch_name
-        id = name_standard+"\n"+ip_working +"\n"
-        return id
-
-    def __visited(self,neighbor,visited):
-        print("--------------------------------------------------")
-        print(visited)
-        print(neighbor)
-        print("--------------------------------------------------")
-        for visit in visited:
-            try:
-                if visit == neighbor:
-                    return True
-            except:
-                return True
-
-        return False
 
         
     def __cdp_crawler(self,id,cdp, version, vlanIP, visited):
@@ -78,20 +63,6 @@ class Crawl_create:
                         self.__cdp_crawler(id,cdp1,version1,vlanIP1,visited)
                     else:
                         ip_address = ""
-
-    
-    def _create_Testbed_device(self,new_device_name,ip_address):
-        new_device = Device(new_device_name,
-                            os = self.os,
-                            connections = {'cli':
-                                        {'protocol':'ssh',
-                                        'ip' : ip_address}},
-                            credentials = {"default":{
-                                            "username":self.user,
-                                            "password":self.password },}
-                        )
-        return new_device
-    
     
     def _get_cdp_info(self,device):
         command = 'show cdp nei detail'
@@ -118,12 +89,12 @@ class Crawl_create:
     def _add_cdp_device_to_graph(self, id ,cdp_object,version):
         current_switch_model = version["version"]["chassis"]
         current_switch_SN = version["version"]["chassis_sn"]
-        current_switch_FW = version["version"]["switch_num"]["1"]["sw_ver"]
+        current_switch_FW = version["version"]["version"]
         my_os = version["version"]["os"]
         self.graph.add_node(id,shape="box",label=f"""{id}
 {current_switch_model}
 {current_switch_SN}
-{my_os} {current_switch_FW}""",color="black")
+{my_os} {current_switch_FW}""",color="black",ip_add = id.split("\n")[1],host=id.split("\n")[0])
         ip_address = ""
         for index in cdp_object['index']:
             new_device_name =  cdp_object['index'][index]['device_id'].split(".")[0]
@@ -166,7 +137,43 @@ class Crawl_create:
         return f"{local_port}->{remote_port}", local_port, remote_port
     
     def __Test_is_router(self,cdp_object,index):
-        return "cloud managed ap" in cdp_object['index'][index]['platform'].lower() or "Polycom" in cdp_object['index'][index]['platform'].lower()
+        #return "cloud managed ap" in cdp_object['index'][index]['platform'].lower() or "Polycom" in cdp_object['index'][index]['platform'].lower()
+        return False
+    def _create_standard_name(self,current_switch_name,ip_working):
+        name_standard  = current_switch_name
+        id = name_standard+"\n"+ip_working +"\n"
+        return id
+
+    def __visited(self,neighbor,visited):
+        print("--------------------------------------------------")
+        print(neighbor)
+        print("--------------------------------------------------")
+        for visit in visited:
+                if visit == neighbor:
+                    print("---------------------Found One-----------------------------")
+                    print(visit)
+                    print("-----------------------^^Same^^---------------------------")
+                    return True
+        return False
+    
+    def _create_Testbed_device(self,new_device_name,ip_address):
+        new_device = Device(new_device_name,
+                            os = self.os,
+                            connections = {'cli':
+                                        {'protocol':'ssh',
+                                        'ip' : ip_address}},
+                            credentials = {"default":{
+                                            "username":self.user,
+                                            "password":self.password },}
+                        )
+        return new_device
+    
+        
+    def _create_standard_name(self,current_switch_name,ip_working):
+        name_standard  = current_switch_name
+        id = name_standard+"\n"+ip_working
+        return id
+
 #######################################################################################################################
 #vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv Output functions go here vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
 #######################################################################################################################
@@ -174,6 +181,7 @@ class Crawl_create:
     def print_map(self):
         viz = nx.nx_agraph.to_agraph(self.graph)
         viz.draw(f"{self.test_bed_name}.png",prog="dot")
+        self.save_as_ansible()
 
     def save_as_ansible(self):
         hosts = {}
@@ -194,8 +202,16 @@ class Crawl_create:
 
         with open(f"{self.test_bed_name}_inventory.yml", 'w') as f:
             yaml.dump(testbed, f, default_flow_style=False)
-
+        self.save_graph_pickle()
         return testbed
+    
+    def save_graph_pickle(self):
+        with open(f"{self.test_bed_name}_graph.pkl", 'wb') as f:
+            pickle.dump(self.graph, f)
+
+    def load_graph_pickle(self):
+        with open(f"{self.test_bed_name}_graph.pkl", 'rb') as f:
+            self.graph = pickle.load(f)
 
 
 if __name__ == "__main__":    

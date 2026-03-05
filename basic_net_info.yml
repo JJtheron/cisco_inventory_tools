@@ -4,12 +4,15 @@
   connection: ansible.netcommon.network_cli
   gather_facts: false
   hosts: all
+  become: true
   vars_prompt:
     - name: enpassword
       prompt: What is en passoword?
+    - name: location_name
+      prompt: What is the name of the Location?
   vars:
     ansible_become_password: "{{enpassword}}"
-    location: "Cottage"
+    location: "{{ location_name }}"
     ansible_network_os: cisco.ios.ios
 
   tasks:
