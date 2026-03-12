@@ -8,8 +8,10 @@
   vars_prompt:
     - name: enpassword
       prompt: What is en passoword?
+      private: true
     - name: location_name
       prompt: What is the name of the Location?
+      private: false
   vars:
     ansible_become_password: "{{enpassword}}"
     location: "{{ location_name }}"

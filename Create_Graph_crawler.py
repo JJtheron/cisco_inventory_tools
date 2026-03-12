@@ -13,7 +13,7 @@ from pyats.utils.secret_strings import SecretString
 
 
 class Crawl_create:
-    def __init__(self,test_bed_name = "default", os="ios", user = "", password = "", device_name = "first_device", ip_address = "", load_pickle = False):
+    def __init__(self,test_bed_name = "default", os="ios", user = "", password = "", device_name = "first_device", ip_address = "", load_pickle = False, parse_vlan=False):
         if not user:
             user = input("Username: ")
         if not password:
@@ -67,7 +67,7 @@ class Crawl_create:
     def _get_cdp_info(self,device):
         command = 'show cdp nei detail'
         command2 = "show version"
-        command3 = "show ip interface"
+        command3 = "show spanning-tree"
         try:
             dev = device
             dev.connect(learn_hostname=True,goto_enable=False,init_exec_commands=[],init_config_commands=[],log_stdout=False)
@@ -182,6 +182,7 @@ class Crawl_create:
         viz = nx.nx_agraph.to_agraph(self.graph)
         viz.draw(f"{self.test_bed_name}.png",prog="dot")
         self.save_as_ansible()
+        self.save_graph_pickle()
 
     def save_as_ansible(self):
         hosts = {}
@@ -202,7 +203,6 @@ class Crawl_create:
 
         with open(f"{self.test_bed_name}_inventory.yml", 'w') as f:
             yaml.dump(testbed, f, default_flow_style=False)
-        self.save_graph_pickle()
         return testbed
     
     def save_graph_pickle(self):
