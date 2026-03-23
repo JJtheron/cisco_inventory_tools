@@ -1,0 +1,39 @@
+---
+
+- name: Grab Vlan Names
+  connection: ansible.netcommon.network_cli
+  gather_facts: false
+  hosts: all
+  become: true
+  vars_prompt:
+    - name: enpassword
+      prompt: What is en passoword?
+      private: true
+    - name: location_name
+      prompt: What is the name of the Location?
+      private: false
+  vars:
+    ansible_become_password: "{{enpassword}}"
+    location: "{{ location_name }}"
+    ansible_network_os: cisco.ios.ios
+
+  tasks:
+    - name: Get Vlan Names
+      cisco.ios.ios_command:
+        commands:
+          show vlan
+      register: command_result
+
+    - name: save Vlans onThe Switch
+      cisco.ios.ios_vlans:
+        running_config: "{{ command_result.stdout[0] }}"
+        state: parsed
+      register: vlan_output
+
+
+    - name: Save the Config
+      ansible.builtin.lineinfile:
+        path: "./{{ location }}/List_Vlans.csv" 
+        line: "{{ item.vlan_id }},{{ item.name }}"
+        create: yes
+      loop: "{{ vlan_output.parsed }}"
