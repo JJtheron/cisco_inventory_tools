@@ -16,17 +16,52 @@
     ansible_become_password: "{{enpassword}}"
     location: "{{ location_name }}"
     ansible_network_os: cisco.ios.ios
+    dest_vlan: "None"
 
   tasks:
+    
+    - name: Show monitor sessions
+      cisco.ios.ios_command:
+        commands: show monitor session all
+      register: monitor_output
+      ignore_errors: true
+
+    - name: Display a custom message
+      ansible.builtin.debug:
+        msg: "{{monitor_output}}"
+      ignore_errors: true
+    
+    - name: Find Destination Vlan
+      set_fact:
+        dest_vlan: "{{ item | regex_search('\\d+') }}"
+      loop: "{{ monitor_output.stdout_lines[0]}}"
+      when: "'VLAN' in item"
+      ignore_errors: true
 
     - name: Get config for Ios devices
       cisco.ios.ios_facts:
-        gather_subset: all 
+        gather_subset: all
+        
+    - name: save show vlan output
+      cisco.ios.ios_command:
+        commands: show vlan
+      register: vlan_output
+
+    - name: save Vlans onThe Switch
+      cisco.ios.ios_vlans:
+        running_config: "{{ vlan_output.stdout[0] }}"
+        state: parsed
+      register: vlan_output
+
+    - name: set array of vlans
+      set_fact:
+        vlan_list: "{{ vlan_output.parsed | map(attribute='vlan_id') | list }}"
+      register: vlan_List
 
     - name: Save the Config
       ansible.builtin.lineinfile:
         path: "./{{ location }}/List_sum.csv" 
-        line: "{{ ansible_net_interfaces.Vlan215.ipv4[0].address }},{{ ansible_net_hostname }},{{ ansible_net_model }},{{ ansible_net_version }}, {{ ansible_net_stacked_serialnums }}"
+        line: "{{ ansible_net_all_ipv4_addresses }}|{{ ansible_net_hostname }}|{{ ansible_net_model }}|{{ ansible_net_version }}|{{ ansible_net_stacked_serialnums }}|{{ vlan_list }}|{{ dest_vlan }}"
         create: yes
         
     
