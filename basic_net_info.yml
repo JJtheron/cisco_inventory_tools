@@ -17,6 +17,8 @@
     location: "{{ location_name }}"
     ansible_network_os: cisco.ios.ios
     dest_vlan: "None"
+    device_tracking: "not capable"
+    Rspan_capable: "not capable"
 
   tasks:
     
@@ -58,10 +60,29 @@
         vlan_list: "{{ vlan_output.parsed | map(attribute='vlan_id') | list }}"
       register: vlan_List
 
+    - name: Get_device_tracking_infof
+      cisco.ios.ios_command:
+        commands:
+          show device-tracking policies 
+      register: command_result
+      ignore_errors: true
+
+    - name: See if there is more than one line in comm-results
+      ansible.builtin.set_fact:
+        device_tracking: "{{ 'device-tracking' if command_result.stdout_lines[0] | length > 1 else 'no device-tracking'}}"
+      ignore_errors: true
+
+    - name: Show monitor session remote vlan
+      cisco.ios.ios_command:
+        commands: show monitor session remote
+      register: rspan_output
+      ignore_errors: true
+      
+
     - name: Save the Config
       ansible.builtin.lineinfile:
         path: "./{{ location }}/List_sum.csv" 
-        line: "{{ ansible_net_all_ipv4_addresses }}|{{ ansible_net_hostname }}|{{ ansible_net_model }}|{{ ansible_net_version }}|{{ ansible_net_stacked_serialnums }}|{{ vlan_list }}|{{ dest_vlan }}"
+        line: "{{ ansible_net_all_ipv4_addresses }}|{{ ansible_net_hostname }}|{{ ansible_net_model }}|{{ ansible_net_version }}|{{ ansible_net_stacked_serialnums }}|{{ vlan_list }}|{{ dest_vlan }}|{{ device_tracking }}"
         create: yes
         
     
