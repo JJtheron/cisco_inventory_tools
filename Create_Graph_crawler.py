@@ -1,5 +1,5 @@
 from pyats_genie_command_parse import GenieCommandParse
-from pyats.topology import Testbed, loader, Device, Interface, Link
+from pyats.topology import Testbed, Device
 import yaml
 import sys
 import traceback
@@ -32,24 +32,24 @@ class Crawl_create:
     def __explore_first_switch(self, device_name, ip_address):
         cdp = {}
         version = {}
-        vlanIP = {}
+        Trunk = {}
         connected = False
         ip_working = ""
         for ip in ip_address:
             first_device = self._create_Testbed_device(device_name, ip)
-            cdp, version, vlanIP, connected = self._get_cdp_info(first_device)
+            cdp, version, Trunk, connected = self._get_cdp_info(first_device)
             ip_working = ip
             if connected: break
 
         if connected:
             id = self._create_standard_name(version["version"]["hostname"],ip_working)
-            self.__cdp_crawler(id,cdp,version,vlanIP,None)
+            self.__cdp_crawler(id,cdp,version,Trunk,None)
 
         
-    def __cdp_crawler(self,id,cdp, version, vlanIP, visited):
+    def __cdp_crawler(self,id,cdp, version, Trunk, visited):
         if visited is None:
             visited = []
-        self._add_cdp_device_to_graph(id, cdp,version)
+        self._add_cdp_device_to_graph(id, cdp,version,Trunk)
         visited.append(id)
         for index in cdp["index"]:
             if len(list(cdp["index"][index]["entry_addresses"].keys())) > 0:
@@ -57,23 +57,23 @@ class Crawl_create:
                 next_device = self._create_Testbed_device(cdp["index"][index]["device_id"], ip_address)
                 next_device_id = self._create_standard_name(cdp["index"][index]["device_id"].split(".")[0], ip_address)
                 if not self.__visited(next_device_id,visited) and not self.__Test_is_router(cdp,index):
-                    cdp1, version1, vlanIP1, connected1 = self._get_cdp_info(next_device)
+                    cdp1, version1, Trunk1, connected1 = self._get_cdp_info(next_device)
                     if connected1:
                         id = self._create_standard_name(version1["version"]["hostname"],ip_address)
-                        self.__cdp_crawler(id,cdp1,version1,vlanIP1,visited)
+                        self.__cdp_crawler(id,cdp1,version1,Trunk1,visited)
                     else:
                         ip_address = ""
     
     def _get_cdp_info(self,device):
         command = 'show cdp nei detail'
         command2 = "show version"
-        command3 = "show spanning-tree"
+        command3 = "show interface trunk"
         try:
             dev = device
             dev.connect(learn_hostname=True,goto_enable=False,init_exec_commands=[],init_config_commands=[],log_stdout=False)
             cdp = dev.default.execute(command)
             version =  dev.default.execute(command2)
-            VlanIP = dev.default.execute(command3)
+            trunk_info = dev.default.execute(command3)
             dev.disconnect()
         except Exception as e:
             sys.stderr.write(f"Could not connect to device {device} Error is {e}")  
@@ -82,11 +82,11 @@ class Crawl_create:
         parse_object = GenieCommandParse(nos=dev.os)
         cdp_parsed =  parse_object.parse_string(show_command = command, show_output_data = cdp)
         version_parsed =  parse_object.parse_string(show_command = command2, show_output_data = version)
-        vlanIP_parsed =  parse_object.parse_string(show_command = command3, show_output_data = VlanIP)
-        return cdp_parsed, version_parsed,vlanIP_parsed, True
+        trunk_info_parsed =  parse_object.parse_string(show_command = command3, show_output_data = trunk_info)
+        return cdp_parsed, version_parsed,trunk_info_parsed, True
 
 
-    def _add_cdp_device_to_graph(self, id ,cdp_object,version):
+    def _add_cdp_device_to_graph(self, id ,cdp_object,version,Trunk):
         current_switch_model = version["version"]["chassis"]
         current_switch_SN = version["version"]["chassis_sn"]
         current_switch_FW = version["version"]["version"]
@@ -98,7 +98,7 @@ class Crawl_create:
         ip_address = ""
         for index in cdp_object['index']:
             new_device_name =  cdp_object['index'][index]['device_id'].split(".")[0]
-            edge_label, local_port, remote_port =  self.__create_port_label(cdp_object,index)
+            edge_label, local_port, remote_port =  self.__create_port_label(cdp_object,index,Trunk)
             try: 
                 if len(list(cdp_object['index'][index]["entry_addresses"].keys())) > 0:
                     ip_address = list(cdp_object['index'][index]["entry_addresses"].keys())[0]
@@ -106,11 +106,18 @@ class Crawl_create:
                 ip_address = ""
                 print(f"{new_device_name} does not have a IP address!!!------------------------<<<<<<<<<<<<")
             new_switch_id = self._create_standard_name(new_device_name,ip_address)
+            index_of_edge = self.__edges_exists(local_port,remote_port,id,new_switch_id)
             if cdp_object['index'][index]['capabilities'].lower().find("switch")>=0 and not self.__Test_is_router(cdp_object,index):
-                if not self.__edges_exists(local_port,remote_port,id,new_switch_id):
-                    self.graph.add_edge(id,new_switch_id,label = edge_label)
+                if not index_of_edge:
+                    trunk1 = self.__get_trunk_vlans_allowed(Trunk,cdp_object['index'][index]['local_interface'])
+                    self.graph.add_edge(id,new_switch_id,label = edge_label,LocalPort=local_port,RemotePort=remote_port,Trunk1=trunk1,Trunk2="")
                     self.graph.add_node(new_switch_id,shape="box",label=f"""{new_switch_id}""",color="red",ip_add=ip_address,host=new_device_name)
-
+                else:
+                    trunk2 = self.__get_trunk_vlans_allowed(Trunk,cdp_object['index'][index]['local_interface'])
+                    self.graph.adj[id][new_switch_id][index_of_edge]["Trunk2"] = trunk2
+                    old_label = self.graph.adj[id][new_switch_id][index_of_edge]["label"]
+                    self.graph.adj[id][new_switch_id][index_of_edge]["label"] = f"""{old_label}
+{trunk2}"""
 #########################################################################################
 #vvvvvvvvvvvvvvvvvvvvvvv Helper functions go here  vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
 #########################################################################################
@@ -124,18 +131,26 @@ class Crawl_create:
 
     def __edges_exists(self,local_port,remote_port,device_g,new_device_name_g):
         if (device_g, new_device_name_g) in self.graph.edges:
-            for label in self.graph.adj[device_g][new_device_name_g]:
-                label1 = self.graph.adj[device_g][new_device_name_g][label]["label"].split("->")[1]
-                label2 =  self.graph.adj[device_g][new_device_name_g][label]["label"].split("->")[0]
+            for index in self.graph.adj[device_g][new_device_name_g]:
+                label1 = self.graph.adj[device_g][new_device_name_g][index]["RemotePort"]
+                label2 =  self.graph.adj[device_g][new_device_name_g][index]["LocalPort"]
                 if local_port == label1 and remote_port == label2:
-                    return True
-        return False
-
-    def __create_port_label(self,cdp_object,index):
+                    return index
+        return None
+ 
+    def __create_port_label(self,cdp_object,index,Trunk):
         local_port = self.__shorten_edge_name(cdp_object['index'][index]['local_interface'])
         remote_port = self.__shorten_edge_name(cdp_object['index'][index]['port_id'])
-        return f"{local_port}->{remote_port}", local_port, remote_port
+        TrunkInfo = self.__get_trunk_vlans_allowed(Trunk,cdp_object['index'][index]['local_interface'])
+        return f"""{TrunkInfo}
+{local_port}->{remote_port}""", local_port, remote_port
     
+    def __get_trunk_vlans_allowed(self,Trunk,Port):
+        for trunk in Trunk["interface"]:
+            if trunk.lower() == Port.lower():
+                return Trunk["interface"][trunk]["vlans_allowed_on_trunk"]
+        return ""
+
     def __Test_is_router(self,cdp_object,index):
         #return "cloud managed ap" in cdp_object['index'][index]['platform'].lower() or "Polycom" in cdp_object['index'][index]['platform'].lower()
         return False
