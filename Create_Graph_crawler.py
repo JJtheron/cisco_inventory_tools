@@ -35,21 +35,22 @@ class Crawl_create:
         Trunk = {}
         connected = False
         ip_working = ""
+        monitor_info_parsed = {}
         for ip in ip_address:
             first_device = self._create_Testbed_device(device_name, ip)
-            cdp, version, Trunk, connected = self._get_cdp_info(first_device)
+            cdp, version, Trunk, connected, monitor_info_parsed = self._get_cdp_info(first_device)
             ip_working = ip
             if connected: break
 
         if connected:
             id = self._create_standard_name(version["version"]["hostname"],ip_working)
-            self.__cdp_crawler(id,cdp,version,Trunk,None)
+            self.__cdp_crawler(id,cdp,version,Trunk,None, monitor_info_parsed)
 
         
-    def __cdp_crawler(self,id,cdp, version, Trunk, visited):
+    def __cdp_crawler(self,id,cdp, version, Trunk, visited,monitor_info_parsed):
         if visited is None:
             visited = []
-        self._add_cdp_device_to_graph(id, cdp,version,Trunk)
+        self._add_cdp_device_to_graph(id, cdp,version,Trunk,monitor_info_parsed)
         visited.append(id)
         for index in cdp["index"]:
             if len(list(cdp["index"][index]["entry_addresses"].keys())) > 0:
@@ -57,10 +58,10 @@ class Crawl_create:
                 next_device = self._create_Testbed_device(cdp["index"][index]["device_id"], ip_address)
                 next_device_id = self._create_standard_name(cdp["index"][index]["device_id"].split(".")[0], ip_address)
                 if not self.__visited(next_device_id,visited) and not self.__Test_is_router(cdp,index):
-                    cdp1, version1, Trunk1, connected1 = self._get_cdp_info(next_device)
+                    cdp1, version1, Trunk1, connected1, monitor_info_parsed1 = self._get_cdp_info(next_device)
                     if connected1:
                         id = self._create_standard_name(version1["version"]["hostname"],ip_address)
-                        self.__cdp_crawler(id,cdp1,version1,Trunk1,visited)
+                        self.__cdp_crawler(id,cdp1,version1,Trunk1,visited,monitor_info_parsed1)
                     else:
                         ip_address = ""
     
@@ -68,12 +69,15 @@ class Crawl_create:
         command = 'show cdp nei detail'
         command2 = "show version"
         command3 = "show interface trunk"
+        command4 = "show monitor session remote"
         try:
             dev = device
             dev.connect(learn_hostname=True,goto_enable=False,init_exec_commands=[],init_config_commands=[],log_stdout=False)
             cdp = dev.default.execute(command)
             version =  dev.default.execute(command2)
             trunk_info = dev.default.execute(command3)
+            try:monitor_info = dev.default.execute(command4)
+            except:monitor_info = ""
             dev.disconnect()
         except Exception as e:
             sys.stderr.write(f"Could not connect to device {device} Error is {e}")  
@@ -83,10 +87,12 @@ class Crawl_create:
         cdp_parsed =  parse_object.parse_string(show_command = command, show_output_data = cdp)
         version_parsed =  parse_object.parse_string(show_command = command2, show_output_data = version)
         trunk_info_parsed =  parse_object.parse_string(show_command = command3, show_output_data = trunk_info)
-        return cdp_parsed, version_parsed,trunk_info_parsed, True
+        rspan_vlan_pattern = re.findall(r'Dest RSPAN VLAN\s*:\s*(\d+)', monitor_info)
+        monitor_info_parsed =  rspan_vlan_pattern
+        return cdp_parsed, version_parsed,trunk_info_parsed, True, monitor_info_parsed
 
 
-    def _add_cdp_device_to_graph(self, id ,cdp_object,version,Trunk):
+    def _add_cdp_device_to_graph(self, id ,cdp_object,version,Trunk,monitor_info_parsed):
         current_switch_model = version["version"]["chassis"]
         current_switch_SN = version["version"]["chassis_sn"]
         current_switch_FW = version["version"]["version"]
@@ -94,7 +100,8 @@ class Crawl_create:
         self.graph.add_node(id,shape="box",label=f"""{id}
 {current_switch_model}
 {current_switch_SN}
-{my_os} {current_switch_FW}""",color="black",ip_add = id.split("\n")[1],host=id.split("\n")[0])
+{my_os} {current_switch_FW}
+RSPAN{monitor_info_parsed}""",color="black",ip_add = id.split("\n")[1],host=id.split("\n")[0])
         ip_address = ""
         for index in cdp_object['index']:
             new_device_name =  cdp_object['index'][index]['device_id'].split(".")[0]
