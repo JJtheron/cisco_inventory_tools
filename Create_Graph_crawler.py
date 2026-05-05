@@ -9,6 +9,8 @@ import getpass
 import networkx as nx
 import matplotlib.pyplot as plt
 import pickle
+from ansible_runner import run
+from pyvis.network import Network
 from pyats.utils.secret_strings import SecretString
 
 
@@ -82,13 +84,12 @@ class Crawl_create:
         except Exception as e:
             sys.stderr.write(f"Could not connect to device {device} Error is {e}")  
             traceback.print_exc() 
-            return {},{},{}, False    
+            return {},{},{}, False,{}    
         parse_object = GenieCommandParse(nos=dev.os)
         cdp_parsed =  parse_object.parse_string(show_command = command, show_output_data = cdp)
         version_parsed =  parse_object.parse_string(show_command = command2, show_output_data = version)
         trunk_info_parsed =  parse_object.parse_string(show_command = command3, show_output_data = trunk_info)
-        rspan_vlan_pattern = re.findall(r'Dest RSPAN VLAN\s*:\s*(\d+)', monitor_info)
-        monitor_info_parsed =  rspan_vlan_pattern
+        monitor_info_parsed =  re.findall(r'Dest RSPAN VLAN\s*:\s*(\d+)', monitor_info)
         return cdp_parsed, version_parsed,trunk_info_parsed, True, monitor_info_parsed
 
 
@@ -101,7 +102,7 @@ class Crawl_create:
 {current_switch_model}
 {current_switch_SN}
 {my_os} {current_switch_FW}
-RSPAN{monitor_info_parsed}""",color="black",ip_add = id.split("\n")[1],host=id.split("\n")[0])
+RSPAN{monitor_info_parsed}""",color={'background': 'white', 'border': 'black'},ip_add = id.split("\n")[1],host=id.split("\n")[0])
         ip_address = ""
         for index in cdp_object['index']:
             new_device_name =  cdp_object['index'][index]['device_id'].split(".")[0]
@@ -116,11 +117,11 @@ RSPAN{monitor_info_parsed}""",color="black",ip_add = id.split("\n")[1],host=id.s
             index_of_edge = self.__edges_exists(local_port,remote_port,id,new_switch_id)
             if cdp_object['index'][index]['capabilities'].lower().find("switch")>=0 and not self.__Test_is_router(cdp_object,index):
                 if index_of_edge is None:
-                    trunk1 = self.__get_trunk_vlans_allowed(Trunk,cdp_object['index'][index]['local_interface'])
-                    self.graph.add_edge(id,new_switch_id,label = edge_label,LocalPort=local_port,RemotePort=remote_port,Trunk1=trunk1,Trunk2="")
-                    self.graph.add_node(new_switch_id,shape="box",label=f"""{new_switch_id}""",color="red",ip_add=ip_address,host=new_device_name)
+                    trunk1, SPT_blocked = self.__get_trunk_vlans_allowed(Trunk,cdp_object['index'][index]['local_interface'])
+                    self.graph.add_edge(id,new_switch_id,label = edge_label,LocalPort=local_port,RemotePort=remote_port,Trunk1=trunk1,Trunk2="",color="red" if SPT_blocked else "black")
+                    self.graph.add_node(new_switch_id,shape="box",label=f"""{new_switch_id}""",color={'background': 'white', 'border': 'red'},ip_add=ip_address,host=new_device_name)
                 else:
-                    trunk2 = self.__get_trunk_vlans_allowed(Trunk,cdp_object['index'][index]['local_interface'])
+                    trunk2, SPT_blocked  = self.__get_trunk_vlans_allowed(Trunk,cdp_object['index'][index]['local_interface'])
                     self.graph.adj[id][new_switch_id][index_of_edge]["Trunk2"] = trunk2
                     old_label = self.graph.adj[id][new_switch_id][index_of_edge]["label"]
                     self.graph.adj[id][new_switch_id][index_of_edge]["label"] = f"""{old_label}
@@ -148,15 +149,18 @@ RSPAN{monitor_info_parsed}""",color="black",ip_add = id.split("\n")[1],host=id.s
     def __create_port_label(self,cdp_object,index,Trunk):
         local_port = self.__shorten_edge_name(cdp_object['index'][index]['local_interface'])
         remote_port = self.__shorten_edge_name(cdp_object['index'][index]['port_id'])
-        TrunkInfo = self.__get_trunk_vlans_allowed(Trunk,cdp_object['index'][index]['local_interface'])
+        TrunkInfo, SPT_blocked = self.__get_trunk_vlans_allowed(Trunk,cdp_object['index'][index]['local_interface'])
         return f"""{TrunkInfo}
 {local_port}->{remote_port}""", local_port, remote_port
     
     def __get_trunk_vlans_allowed(self,Trunk,Port):
         for trunk in Trunk["interface"]:
             if trunk.lower() == Port.lower():
-                return Trunk["interface"][trunk]["vlans_allowed_on_trunk"]
-        return ""
+                if Trunk["interface"][trunk]["vlans_allowed_on_trunk"].lower() == Trunk["interface"][trunk]["vlans_in_stp_forwarding_not_pruned"].lower():
+                    return Trunk["interface"][trunk]["vlans_allowed_on_trunk"], False
+                else:
+                    return Trunk["interface"][trunk]["vlans_allowed_on_trunk"], True
+        return "", False
 
     def __Test_is_router(self,cdp_object,index):
         #return "cloud managed ap" in cdp_object['index'][index]['platform'].lower() or "Polycom" in cdp_object['index'][index]['platform'].lower()
@@ -203,8 +207,21 @@ RSPAN{monitor_info_parsed}""",color="black",ip_add = id.split("\n")[1],host=id.s
     def print_map(self):
         viz = nx.nx_agraph.to_agraph(self.graph)
         viz.draw(f"{self.test_bed_name}.png",prog="dot")
-        self.save_as_ansible()
+        file_name = self.save_as_ansible()
         self.save_graph_pickle()
+        self.create_pyviz_graph()
+#        self.run_basic_net_info_playbook(file_name)
+    
+    def run_basic_net_info_playbook(self, inventory_file):
+        passwords = {}
+        playbook = Playbook.load("basic_net_info.yml",)
+        playbook.run(inventory=inventory_file)
+    
+    def create_pyviz_graph(self):
+        net = Network(notebook=True)
+        net.from_nx(self.graph)
+        net.repulsion(node_distance=300, central_gravity=0.3, spring_length=200, spring_strength=0.10, damping=0.95)
+        net.show(f"{self.test_bed_name}_pyviz.html")
 
     def save_as_ansible(self):
         hosts = {}
@@ -225,7 +242,7 @@ RSPAN{monitor_info_parsed}""",color="black",ip_add = id.split("\n")[1],host=id.s
 
         with open(f"{self.test_bed_name}_inventory.yml", 'w') as f:
             yaml.dump(testbed, f, default_flow_style=False)
-        return testbed
+        return f"{self.test_bed_name}_inventory.yml"
     
     def save_graph_pickle(self):
         with open(f"{self.test_bed_name}_graph.pkl", 'wb') as f:
