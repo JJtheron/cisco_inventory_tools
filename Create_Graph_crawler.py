@@ -15,7 +15,7 @@ from pyats.utils.secret_strings import SecretString
 
 
 class Crawl_create:
-    def __init__(self,test_bed_name = "default", os="ios", user = "", password = "", device_name = "first_device", ip_address = "", load_pickle = False, parse_vlan=False):
+    def __init__(self,test_bed_name = "default", os="ios", user = "", password = "", device_name = "first_device", ip_address = "", load_pickle = False, parse_vlan=False, corp_net=False):
         if not user:
             user = input("Username: ")
         if not password:
@@ -25,6 +25,7 @@ class Crawl_create:
         self.password = password
         self.graph = nx.MultiGraph()
         self.test_bed_name = test_bed_name
+        self.corp_net = corp_net
         if load_pickle:
             self.load_graph_pickle()
             self.print_map()
@@ -156,19 +157,21 @@ RSPAN{monitor_info_parsed}""",color={'background': 'white', 'border': 'black'},i
     def __get_trunk_vlans_allowed(self,Trunk,Port):
         for trunk in Trunk["interface"]:
             if trunk.lower() == Port.lower():
-                if Trunk["interface"][trunk]["vlans_allowed_on_trunk"].lower() == Trunk["interface"][trunk]["vlans_in_stp_forwarding_not_pruned"].lower():
+                if Trunk["interface"][trunk]["vlans_allowed_active_in_mgmt_domain"].lower() == Trunk["interface"][trunk]["vlans_in_stp_forwarding_not_pruned"].lower():
                     return Trunk["interface"][trunk]["vlans_allowed_on_trunk"], False
                 else:
                     return Trunk["interface"][trunk]["vlans_allowed_on_trunk"], True
         return "", False
 
     def __Test_is_router(self,cdp_object,index):
-        #return "cloud managed ap" in cdp_object['index'][index]['platform'].lower() or "Polycom" in cdp_object['index'][index]['platform'].lower()
-        return False
-    def _create_standard_name(self,current_switch_name,ip_working):
-        name_standard  = current_switch_name
-        id = name_standard+"\n"+ip_working +"\n"
-        return id
+        if self.corp_net:
+            if "platform" in cdp_object['index'][index].keys():
+                value1 = "cloud" in cdp_object['index'][index]['platform'].lower() or "poly" in cdp_object['index'][index]['platform'].lower()
+                return value1
+            else:
+                return False
+        else:
+            return False
 
     def __visited(self,neighbor,visited):
         print("--------------------------------------------------")
