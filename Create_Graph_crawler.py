@@ -221,7 +221,7 @@ RSPAN{monitor_info_parsed}""",color={'background': 'white', 'border': 'black'},i
         playbook.run(inventory=inventory_file)
     
     def create_pyviz_graph(self):
-        net = Network(notebook=True)
+        net = Network(notebook=True,filter_menu=True)
         net.from_nx(self.graph)
         net.repulsion(node_distance=300, central_gravity=0.3, spring_length=200, spring_strength=0.10, damping=0.95)
         net.show(f"{self.test_bed_name}_pyviz.html")
