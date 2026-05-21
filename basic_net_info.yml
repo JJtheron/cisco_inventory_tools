@@ -19,6 +19,7 @@
     dest_vlan: "None"
     device_tracking: "Not Device Tracking capable"
     Rspan_capable: "Not RSPAN capable"
+    snmp_location: "No SNMP Location"
 
   tasks:
     
@@ -79,6 +80,13 @@
       register: command_result_stratix
       ignore_errors: true
 
+    - name: Get_location
+      cisco.ios.ios_command:
+        commands:
+          show snmp location
+      register: snmp_location
+      ignore_errors: true
+
     - name: if comand result stratix
       ansible.builtin.set_fact:
         device_tracking: "{{ 'device-tracking' if command_result_stratix.stdout_lines[0] | length > 4 else 'no device-tracking'}}"
@@ -105,7 +113,7 @@
     - name: Save the Config
       ansible.builtin.lineinfile:
         path: "./{{ location }}/List_sum.csv" 
-        line: "{{ ansible_net_all_ipv4_addresses }}|{{ ansible_net_hostname }}|{{ ansible_net_model }}|{{ ansible_net_version }}|{{ ansible_net_stacked_serialnums }}|{{ vlan_list }}|{{ dest_vlan }}|{{ device_tracking }}|{{ Rspan_capable }}"
+        line: "{{ ansible_net_all_ipv4_addresses }}|{{ ansible_net_hostname }}|{{ ansible_net_model }}|{{ ansible_net_version }}|{{ ansible_net_stacked_serialnums }}|{{ vlan_list }}|{{ dest_vlan }}|{{ device_tracking }}|{{ Rspan_capable }}|{{ snmp_location}}"
         create: yes
         
     
