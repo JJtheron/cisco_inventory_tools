@@ -19,9 +19,13 @@
     dest_vlan: "None"
     device_tracking: "Not Device Tracking capable"
     Rspan_capable: "Not RSPAN capable"
-    snmp_location: "No SNMP Location"
+    snmp_location1: "No SNMP Location"
+    flash_output1: "No Flash Info"
 
   tasks:
+    - name: Get config for Ios devices
+      cisco.ios.ios_facts:
+        gather_subset: all
     
     - name: Show monitor sessions
       cisco.ios.ios_command:
@@ -40,10 +44,6 @@
       loop: "{{ monitor_output.stdout_lines[0]}}"
       when: "'VLAN' in item"
       ignore_errors: true
-
-    - name: Get config for Ios devices
-      cisco.ios.ios_facts:
-        gather_subset: all
         
     - name: save show vlan output
       cisco.ios.ios_command:
@@ -87,6 +87,11 @@
       register: snmp_location
       ignore_errors: true
 
+    - name: check if snmp location is configured
+      ansible.builtin.set_fact:
+        snmp_location1: "{{ snmp_location.stdout_lines[0][0] if snmp_location.stdout_lines[0] | length > 0 else 'No SNMP Location'}}"
+      ignore_errors: true
+
     - name: if comand result stratix
       ansible.builtin.set_fact:
         device_tracking: "{{ 'device-tracking' if command_result_stratix.stdout_lines[0] | length > 4 else 'no device-tracking'}}"
@@ -108,16 +113,29 @@
         Rspan_capable: "RSPAN Capable"
       when: rspan_output is not failed
       ignore_errors: true
-      
+
+    - name: Get sync status of SDflash
+      cisco.ios.ios_command:
+        commands: sh sync status
+      register: flash_output
+      tags: flash
+      ignore_errors: true
+
+    - name: See if flash output is empty
+      ansible.builtin.set_fact:
+        flash_output1: "{{ flash_output.stdout_lines[0] if flash_output.stdout_lines[0] | length > 1 else 'No Flash Info'}}"
+      ignore_errors: true
 
     - name: Save the Config
       ansible.builtin.lineinfile:
         path: "./{{ location }}/List_sum.csv" 
-        line: "{{ ansible_net_all_ipv4_addresses }}|{{ ansible_net_hostname }}|{{ ansible_net_model }}|{{ ansible_net_version }}|{{ ansible_net_stacked_serialnums }}|{{ vlan_list }}|{{ dest_vlan }}|{{ device_tracking }}|{{ Rspan_capable }}|{{ snmp_location}}"
+        line: "{{ ansible_net_all_ipv4_addresses }}|{{ ansible_net_hostname }}|{{ ansible_net_model }}|{{ ansible_net_version }}|{{ ansible_net_stacked_serialnums }}|{{ vlan_list }}|{{ dest_vlan }}|{{ device_tracking }}|{{ Rspan_capable }}|{{ snmp_location1 }}|{{ flash_output1 }}"
         create: yes
+      throttle: 1
         
     
     - name: Save all to file
       copy:
         content: "{{ ansible_net_config }}"
         dest: "./{{ location }}/{{ ansible_net_hostname }}_sh_run.txt" 
+      throttle: 1
