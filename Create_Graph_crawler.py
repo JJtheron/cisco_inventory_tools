@@ -107,7 +107,7 @@ class Crawl_create:
 {current_switch_model}
 {current_switch_SN}
 {my_os} {current_switch_FW}
-RSPAN{monitor_info_parsed}""",color={'background': 'white', 'border': 'black'},ip_add = id.split("\n")[1],host=id.split("\n")[0])
+RSPAN{monitor_info_parsed}""",color={'background': 'white', 'border': 'black'},ip_add = id.split("\n")[1],host=id.split("\n")[0], RSPAN=monitor_info_parsed, SNMP_Location=snmp_location, Model=current_switch_model, Serial_Number=current_switch_SN, OS=my_os, Firmware=current_switch_FW)
         ip_address = ""
         for index in cdp_object['index']:
             new_device_name =  cdp_object['index'][index]['device_id'].split(".")[0]
@@ -123,7 +123,7 @@ RSPAN{monitor_info_parsed}""",color={'background': 'white', 'border': 'black'},i
             if cdp_object['index'][index]['capabilities'].lower().find("switch")>=0 and not self.__Test_is_router(cdp_object,index):
                 if index_of_edge is None:
                     trunk1, SPT_blocked = self.__get_trunk_vlans_allowed(Trunk,cdp_object['index'][index]['local_interface'])
-                    self.graph.add_edge(id,new_switch_id,label = edge_label,LocalPort=local_port,RemotePort=remote_port,Trunk1=trunk1,Trunk2="",color="red" if SPT_blocked else "black")
+                    self.graph.add_edge(id,new_switch_id,label = edge_label,LocalPort=local_port,RemotePort=remote_port,Trunk1=trunk1,Trunk2="",color="red" if SPT_blocked else "black",weight=9999 if SPT_blocked else 1)
                     self.graph.add_node(new_switch_id,shape="box",label=f"""{new_switch_id}""",color={'background': 'white', 'border': 'red'},ip_add=ip_address,host=new_device_name)
                 else:
                     trunk2, SPT_blocked  = self.__get_trunk_vlans_allowed(Trunk,cdp_object['index'][index]['local_interface'])

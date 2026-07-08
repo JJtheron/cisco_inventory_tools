@@ -8,6 +8,30 @@ class PickleLoader:
     """
     A class that loads and deserializes a pickle file, storing the data
     in an instance variable accessible throughout the class.
+    Graph Node looks like this:
+        {id}
+        {snmp_location}
+        {current_switch_model}
+        {current_switch_SN}
+        {my_os} {current_switch_FW}
+        RSPAN{monitor_info_parsed},
+        color={'background': 'white', 'border': 'black'},
+        ip_add = id.split("\n")[1],host=id.split("\n")[0], 
+        RSPAN=monitor_info_parsed, 
+        SNMP_Location=snmp_location, 
+        Model=current_switch_model, 
+        Serial_Number=current_switch_SN, 
+        OS=my_os, 
+        Firmware=current_switch_FW
+        
+    Edges look like this:
+        id, <- One switch ID
+        new_switch_id, <- Other switch ID
+        label = edge_label,
+        LocalPort=local_port,
+        RemotePort=remote_port,
+        Trunk1=trunk1,Trunk2="",
+        color="red" if SPT_blocked else "black"
     """
     
     def __init__(self, pickle_file_path, test_bed_name):
