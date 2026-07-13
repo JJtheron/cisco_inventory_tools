@@ -15,7 +15,7 @@ from pyats.utils.secret_strings import SecretString
 
 
 class Crawl_create:
-    def __init__(self,test_bed_name = "default", os="ios", user = "", password = "", device_name = "first_device", ip_address = "", load_pickle = False, parse_vlan=False, corp_net=False):
+    def __init__(self,test_bed_name = "default", os="ios", user = "", password = "", device_name = "first_device", ip_address = "", load_pickle = False, parse_vlan=False, corp_net=False, use_name_as_id=False):
         if not user:
             user = input("Username: ")
         if not password:
@@ -26,6 +26,7 @@ class Crawl_create:
         self.graph = nx.MultiGraph()
         self.test_bed_name = test_bed_name
         self.corp_net = corp_net
+        self.use_name_as_id = use_name_as_id
         if load_pickle:
             self.load_graph_pickle()
             self.print_map()
@@ -41,19 +42,19 @@ class Crawl_create:
         monitor_info_parsed = {}
         for ip in ip_address:
             first_device = self._create_Testbed_device(device_name, ip)
-            cdp, version, Trunk, connected, monitor_info_parsed, snmp_location = self._get_cdp_info(first_device)
+            cdp, version, Trunk, connected, monitor_info_parsed, snmp_location, interface_status_parsed = self._get_cdp_info(first_device)
             ip_working = ip
             if connected: break
 
         if connected:
             id = self._create_standard_name(version["version"]["hostname"],ip_working)
-            self.__cdp_crawler(id,cdp,version,Trunk,None, monitor_info_parsed, snmp_location)
+            self.__cdp_crawler(id,version["version"]["hostname"],ip_working,cdp,version,Trunk,None, monitor_info_parsed, snmp_location, interface_status_parsed)
 
         
-    def __cdp_crawler(self,id,cdp, version, Trunk, visited,monitor_info_parsed, snmp_location):
+    def __cdp_crawler(self,id,host_name,ip_address,cdp, version, Trunk, visited,monitor_info_parsed, snmp_location, interface_status_parsed):
         if visited is None:
             visited = []
-        self._add_cdp_device_to_graph(id, cdp,version,Trunk,monitor_info_parsed, snmp_location)
+        self._add_cdp_device_to_graph(id,host_name,ip_address,cdp,version,Trunk,monitor_info_parsed, snmp_location,interface_status_parsed)
         visited.append(id)
         for index in cdp["index"]:
             if len(list(cdp["index"][index]["entry_addresses"].keys())) > 0:
@@ -61,10 +62,10 @@ class Crawl_create:
                 next_device = self._create_Testbed_device(cdp["index"][index]["device_id"], ip_address)
                 next_device_id = self._create_standard_name(cdp["index"][index]["device_id"].split(".")[0], ip_address)
                 if not self.__visited(next_device_id,visited) and not self.__Test_is_router(cdp,index):
-                    cdp1, version1, Trunk1, connected1, monitor_info_parsed1, snmp_location1 = self._get_cdp_info(next_device)
+                    cdp1, version1, Trunk1, connected1, monitor_info_parsed1, snmp_location1, interface_status_parsed1 = self._get_cdp_info(next_device)
                     if connected1:
                         id = self._create_standard_name(version1["version"]["hostname"],ip_address)
-                        self.__cdp_crawler(id,cdp1,version1,Trunk1,visited,monitor_info_parsed1, snmp_location1)
+                        self.__cdp_crawler(id,version1["version"]["hostname"],ip_address,cdp1,version1,Trunk1,visited,monitor_info_parsed1, snmp_location1,interface_status_parsed1)
                     else:
                         ip_address = ""
     
@@ -74,6 +75,7 @@ class Crawl_create:
         command3 = "show interface trunk"
         command4 = "show monitor session remote"
         command5 = "show snmp location"
+        command6 = "show interface status"
         try:
             dev = device
             dev.connect(learn_hostname=True,goto_enable=False,init_exec_commands=[],init_config_commands=[],log_stdout=False)
@@ -81,33 +83,39 @@ class Crawl_create:
             version =  dev.default.execute(command2)
             trunk_info = dev.default.execute(command3)
             try:monitor_info = dev.default.execute(command4)
-            except:monitor_info = ""
+            except:monitor_info = None
             try: snmp_location = dev.default.execute(command5)
             except: snmp_location = "No SNMP Location"
+            interface_status = dev.default.execute(command6)
             dev.disconnect()
         except Exception as e:
             sys.stderr.write(f"Could not connect to device {device} Error is {e}")  
             traceback.print_exc() 
-            return {},{},{}, False,{},"No SNMP Location"   
+            return {},{},{}, False,{},"No SNMP Location",{}   
         parse_object = GenieCommandParse(nos=dev.os)
         cdp_parsed =  parse_object.parse_string(show_command = command, show_output_data = cdp)
         version_parsed =  parse_object.parse_string(show_command = command2, show_output_data = version)
         trunk_info_parsed =  parse_object.parse_string(show_command = command3, show_output_data = trunk_info)
-        monitor_info_parsed =  re.findall(r'Dest RSPAN VLAN\s*:\s*(\d+)', monitor_info)
-        return cdp_parsed, version_parsed,trunk_info_parsed, True, monitor_info_parsed, snmp_location
+        interface_status_parsed =  parse_object.parse_string(show_command = command6, show_output_data = interface_status)
+        if monitor_info:
+            monitor_info_parsed =  re.findall(r'Dest RSPAN VLAN\s*:\s*(\d+)', monitor_info)
+        else:
+            monitor_info_parsed = "NA"
+        return cdp_parsed, version_parsed,trunk_info_parsed, True, monitor_info_parsed, snmp_location, interface_status_parsed
 
 
-    def _add_cdp_device_to_graph(self, id ,cdp_object,version,Trunk,monitor_info_parsed, snmp_location):
+    def _add_cdp_device_to_graph(self, id ,host_name,ip_address,cdp_object,version,Trunk,monitor_info_parsed, snmp_location, interface_status_parsed):
         current_switch_model = version["version"]["chassis"]
         current_switch_SN = version["version"]["chassis_sn"]
         current_switch_FW = version["version"]["version"]
         my_os = version["version"]["os"]
-        self.graph.add_node(id,shape="box",label=f"""{id}
+        self.graph.add_node(id,shape="box",label=f"""{host_name}
+{ip_address}
 {snmp_location}
 {current_switch_model}
 {current_switch_SN}
 {my_os} {current_switch_FW}
-RSPAN{monitor_info_parsed}""",color={'background': 'white', 'border': 'black'},ip_add = id.split("\n")[1],host=id.split("\n")[0], RSPAN=monitor_info_parsed, SNMP_Location=snmp_location, Model=current_switch_model, Serial_Number=current_switch_SN, OS=my_os, Firmware=current_switch_FW)
+RSPAN{monitor_info_parsed}""",color={'background': 'white', 'border': 'black'},ip_add = ip_address,host=host_name, RSPAN=monitor_info_parsed, SNMP_Location=snmp_location, Model=current_switch_model, Serial_Number=current_switch_SN, OS=my_os, Firmware=current_switch_FW, Trunk=Trunk, portInfo=interface_status_parsed, cdp_info=cdp_object)
         ip_address = ""
         for index in cdp_object['index']:
             new_device_name =  cdp_object['index'][index]['device_id'].split(".")[0]
@@ -204,7 +212,10 @@ RSPAN{monitor_info_parsed}""",color={'background': 'white', 'border': 'black'},i
         
     def _create_standard_name(self,current_switch_name,ip_working):
         name_standard  = current_switch_name
-        id = name_standard+"\n"+ip_working
+        if self.use_name_as_id:
+            id = current_switch_name
+        else:
+            id = name_standard+"\n"+ip_working
         return id
 
 #######################################################################################################################

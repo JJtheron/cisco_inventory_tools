@@ -1,0 +1,7 @@
+*
+*log
+!.gitignore
+!*.py
+!basic_net_info.yml
+!GetVlan.yaml
+!MACKSaveCompare.yml
