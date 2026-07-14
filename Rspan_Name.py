@@ -1,4 +1,5 @@
 import pickle
+import pprint
 from pyvis.network import Network
 import networkx as nx
 import fire
@@ -80,8 +81,13 @@ class FindShortestPath:
         for node in self.graph.nodes:
             if node != self.root_node[0]:
                 try:
-                    path = nx.shortest_path(self.graph, source=self.root_node[0], target=node, weight='weight')
-                    self.Rspan_paths[node] = path
+                    Serial_Number = self.graph.nodes[node]['Serial_Number']
+                except:
+                    Serial_Number = "None"
+                try:
+                    if Serial_Number != "None":
+                        path = nx.shortest_path(self.graph, source=self.root_node[0], target=node, weight='weight')
+                        self.Rspan_paths[node] = path
                 except nx.NetworkXNoPath:
                     self.Rspan_paths[node] = None
     
@@ -118,7 +124,11 @@ class FindShortestPath:
                 rspan_info = self.graph.nodes[node]['RSPAN'][0]
             except:
                 rspan_info = "0"
-            if rspan_info == "0":
+            try:
+                Serial_Number = self.graph.nodes[node]['Serial_Number']
+            except:
+                Serial_Number = "None"
+            if rspan_info == "0" and Serial_Number != "None":
                 self.graph.nodes[node]['RSPAN'] = self.next_rspan_number
                 self.graph.nodes[node]['RSPAN_NAME'] = f'RSPAN_{node.split("\n")[0]}_{self.next_rspan_number}'
                 self.next_rspan_number += 1
@@ -139,11 +149,20 @@ class FindShortestPath:
                                                 "RSPAN": []
                                                         }
                                             }
-            else:
+            elif rspan_info != "0" and Serial_Number != "None":
                 self.Rspan_Commands[node] = {"Local Rspan Vlans": {"RSPAN": {"number": self.graph.nodes[node]['RSPAN'][0], 
                                                                             "name": self.graph.nodes[node]['host'], 
                                                                             "remote-span": True}, 
                                                                             "Source ports": []},
+                                            "Carrier Rspan Vlans": {
+                                                "RSPAN": []
+                                                        }
+                                            }
+            elif Serial_Number == "None":
+                self.Rspan_Commands[node] = {"Local Rspan Vlans": {"RSPAN": {"number": "0", 
+                                                            "name": "None", 
+                                                            "remote-span": False}, 
+                                                            "Source ports": []},
                                             "Carrier Rspan Vlans": {
                                                 "RSPAN": []
                                                         }
@@ -201,9 +220,9 @@ class FindShortestPath:
                         self.Rspan_Commands[node]["Local Rspan Vlans"]["UP_PORT"] = current_node_cdp_info['index'][index]['local_interface']
                     elif future_node and current_node_cdp_info['index'][index]['device_id'].split(".")[0] == Sub_Graph.nodes[future_node]['host']:
                         self.Rspan_Commands[node]["Local Rspan Vlans"]["DOWN_PORT"] = current_node_cdp_info['index'][index]['local_interface']
-
-
                 node_count += 1
+        pp = pprint.PrettyPrinter(indent=4)
+        pp.pprint(self.Rspan_Commands)
 
 if __name__ == "__main__":
     fire.Fire(FindShortestPath)
