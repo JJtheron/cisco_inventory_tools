@@ -191,9 +191,7 @@ class FindShortestPath:
         for node, path in self.Rspan_paths.items():
             if path is not None:
                 for switch in path:
-                    if switch == node:
-                        continue
-                    elif switch != node:
+                    if switch != node:
                             Rspan_currnet_switch = self.Rspan_Commands[node]["Local Rspan Vlans"]['RSPAN']
                             if Rspan_currnet_switch["number"] != "0":
                                 self.Rspan_Commands[switch]["Carrier Rspan Vlans"]["RSPAN"].append(Rspan_currnet_switch)
@@ -218,13 +216,17 @@ class FindShortestPath:
                     future_node = self.Rspan_paths[path][node_count+1]
                 for index in current_node_cdp_info['index']:
                     if past_node and current_node_cdp_info['index'][index]['device_id'].split(".")[0] == Sub_Graph.nodes[past_node]['host']:
-                        self.Rspan_Commands[node]["UP_PORT"] = current_node_cdp_info['index'][index]['local_interface']
+                        if "UP_PORT" not in self.Rspan_Commands[node]:
+                            self.Rspan_Commands[node]["UP_PORT"] = {}
+                        self.Rspan_Commands[node]["UP_PORT"][current_node_cdp_info['index'][index]['local_interface']] = self.Rspan_Commands[future_node]["Carrier Rspan Vlans"]["RSPAN"].copy()
                     elif future_node and current_node_cdp_info['index'][index]['device_id'].split(".")[0] == Sub_Graph.nodes[future_node]['host']:
+                        if "DOWN_PORT" not in self.Rspan_Commands[node]:
+                            self.Rspan_Commands[node]["DOWN_PORT"] = {}
                         local_port = current_node_cdp_info['index'][index]['local_interface']
-                        List_of_all_vlans = self.Rspan_Commands[future_node]["Carrier Rspan Vlans"]["RSPAN"]
+                        List_of_all_vlans = self.Rspan_Commands[future_node]["Carrier Rspan Vlans"]["RSPAN"].copy()
                         local_vlan = self.Rspan_Commands[future_node]["Local Rspan Vlans"]["RSPAN"]
                         List_of_all_vlans.append(local_vlan)
-                        self.Rspan_Commands[node]["DOWN_PORT"] = {local_port:List_of_all_vlans}
+                        self.Rspan_Commands[node]["DOWN_PORT"][local_port] = List_of_all_vlans
                 node_count += 1
 
     def create_cisco_ios_monitor_session_commands(self):
@@ -245,22 +247,32 @@ class FindShortestPath:
                     print(f"name {transiant_vlan['name']}")
                     print("remote-span")
                 # Add all traniant vlans to the down_port Trunk
-                if 'DOWN_PORT' in self.Rspan_Commands[node]['Local Rspan Vlans']:
+                if 'DOWN_PORT' in self.Rspan_Commands[node]:
                     for down_port in self.Rspan_Commands[node]['DOWN_PORT']:
                         print(f"interface {down_port}")
-                        transiant_vlan_numbers = [str(vlan['number']) for vlan in self.Rspan_Commands[node]['DOWN_PORT'][down_port]['number']]
+                        transiant_vlan_numbers = [str(vlan['number']) for vlan in self.Rspan_Commands[node]['DOWN_PORT'][down_port]]
                         print(f"switchport trunk allowed vlan add {','.join(transiant_vlan_numbers)}")
                 transiant_vlan_numbers = []
                 # Add Transiant and local RSPAN vlans to the up_port Trunk
                 if 'UP_PORT' in self.Rspan_Commands[node]:
-                    print(f"interface {self.Rspan_Commands[node]['UP_PORT']}")
-                    transiant_vlan_numbers = [str(vlan['number']) for vlan in self.Rspan_Commands[node]['Carrier Rspan Vlans']['RSPAN']]
-                    all_vlan_numbers = transiant_vlan_numbers + [str(self.Rspan_Commands[node]['Local Rspan Vlans']['RSPAN']['number'])]
-                    print(f"switchport trunk allowed vlan add {','.join(all_vlan_numbers)}")
+                    for up_port in self.Rspan_Commands[node]['UP_PORT']:
+                        print(f"interface {up_port}")
+                        transiant_vlan_numbers = [str(vlan['number']) for vlan in self.Rspan_Commands[node]['Carrier Rspan Vlans']['RSPAN']]
+                        all_vlan_numbers = transiant_vlan_numbers + [str(self.Rspan_Commands[node]['Local Rspan Vlans']['RSPAN']['number'])]
+                        print(f"switchport trunk allowed vlan add {','.join(all_vlan_numbers)}")
                 print("!")
                 print("!")
                 print("!")
                 print("!")
+
+    def create_list_of_Vlans_for_network(self):
+        self.find_up_and_down_ports()
+        print("Vlan Switch,IP_add ,Vlan Number, Vlan Name, Model")
+        for node in self.graph.nodes:
+            if 'Model' in self.graph.nodes[node]:
+                print(f"{self.graph.nodes[node]['host']},{self.graph.nodes[node]['ip_add']},{self.Rspan_Commands[node]["Local Rspan Vlans"]["RSPAN"]["number"]},{self.Rspan_Commands[node]["Local Rspan Vlans"]["RSPAN"]["name"]},{self.graph.nodes[node]['Model']}")
+
+
 
 if __name__ == "__main__":
     fire.Fire(FindShortestPath)
