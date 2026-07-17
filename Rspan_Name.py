@@ -119,7 +119,8 @@ class FindShortestPath:
     
     def assign_RSPAN_to_non_rspan_nodes(self):
         self.find_rspan_next_number()
-        for node in self.graph.nodes:
+        dfs_order = nx.dfs_tree(self.graph,source=self.root_node[0])
+        for node in dfs_order.nodes:
             try:
                 rspan_info = self.graph.nodes[node]['RSPAN'][0]
             except:
@@ -130,6 +131,7 @@ class FindShortestPath:
                 Serial_Number = "None"
             if rspan_info == "0" and Serial_Number != "None":
                 self.graph.nodes[node]['RSPAN'] = self.next_rspan_number
+                self.graph.nodes[node]['label'] = f"{self.graph.nodes[node]['label']}\n{self.graph.nodes[node]['RSPAN']}"
                 self.graph.nodes[node]['RSPAN_NAME'] = f'RSPAN_{node.split("\n")[0]}_{self.next_rspan_number}'
                 self.next_rspan_number += 1
                 self.Rspan_Commands[node] = {"Local Rspan Vlans": {"RSPAN": {"number": self.graph.nodes[node]['RSPAN'], 
@@ -138,16 +140,22 @@ class FindShortestPath:
                                                                             "Source ports": []},
                                             "Carrier Rspan Vlans": {
                                                 "RSPAN": []
-                                                        }
+                                                        },
+                                            "active": True
                                             }
-            elif rspan_info == "N":
-                self.Rspan_Commands[node] = {"Local Rspan Vlans": {"RSPAN": {"number": "0", 
-                                                            "name": "None", 
+            elif rspan_info == "N" and Serial_Number != "None":
+                self.graph.nodes[node]['RSPAN'] = self.next_rspan_number
+                self.graph.nodes[node]['label'] = f"{self.graph.nodes[node]['label']}\n{self.graph.nodes[node]['RSPAN']}"
+                self.graph.nodes[node]['RSPAN_NAME'] = f'RSPAN_{node.split("\n")[0]}_{self.next_rspan_number}'
+                self.next_rspan_number += 1
+                self.Rspan_Commands[node] = {"Local Rspan Vlans": {"RSPAN": {"number": self.graph.nodes[node]['RSPAN'],  
+                                                            "name": self.graph.nodes[node]['RSPAN_NAME'], 
                                                             "remote-span": False}, 
                                                             "Source ports": []},
                                             "Carrier Rspan Vlans": {
                                                 "RSPAN": []
-                                                        }
+                                                        },
+                                            "active": False
                                             }
             elif rspan_info != "0" and Serial_Number != "None":
                 self.Rspan_Commands[node] = {"Local Rspan Vlans": {"RSPAN": {"number": self.graph.nodes[node]['RSPAN'][0], 
@@ -156,7 +164,8 @@ class FindShortestPath:
                                                                             "Source ports": []},
                                             "Carrier Rspan Vlans": {
                                                 "RSPAN": []
-                                                        }
+                                                        },
+                                            "active": True
                                             }
             elif Serial_Number == "None":
                 self.Rspan_Commands[node] = {"Local Rspan Vlans": {"RSPAN": {"number": "0", 
@@ -165,8 +174,10 @@ class FindShortestPath:
                                                             "Source ports": []},
                                             "Carrier Rspan Vlans": {
                                                 "RSPAN": []
-                                                        }
+                                                        },
+                                            "active": False
                                             }
+    
 
     def find_all_ports_that_are_not_trunk(self):
         self.assign_RSPAN_to_non_rspan_nodes()
@@ -193,7 +204,7 @@ class FindShortestPath:
                 for switch in path:
                     if switch != node:
                             Rspan_currnet_switch = self.Rspan_Commands[node]["Local Rspan Vlans"]['RSPAN']
-                            if Rspan_currnet_switch["number"] != "0":
+                            if self.Rspan_Commands[node]['active']:
                                 self.Rspan_Commands[switch]["Carrier Rspan Vlans"]["RSPAN"].append(Rspan_currnet_switch)
                 
         # print(self.Rspan_Commands)
@@ -228,6 +239,24 @@ class FindShortestPath:
                         List_of_all_vlans.append(local_vlan)
                         self.Rspan_Commands[node]["DOWN_PORT"][local_port] = List_of_all_vlans
                 node_count += 1
+    
+    def relabel_edges_for_rspan(self):
+        for node in self.graph.nodes:
+            for edge in self.graph.edges(node):
+                for Rspan_node in self.Rspan_Commands:
+                    #label each edge attaced to node
+                    print(edge[0])
+                    print(edge[1])
+                    myId = self.graph.get_edge_data(edge[0],edge[1])
+                    if edge[0] == Rspan_node:
+                        myId['label'] = "foo"
+
+    def print_map_with_new_Rspan_scheme(self):
+        self.find_up_and_down_ports()
+        self.relabel_edges_for_rspan()
+        viz = nx.nx_agraph.to_agraph(self.graph)
+        file_name=f"{self.test_bed_name}"
+        viz.draw(f"{file_name}.png",prog="dot")
 
     def create_cisco_ios_monitor_session_commands(self):
         self.find_up_and_down_ports()
