@@ -5,6 +5,9 @@ import networkx as nx
 import fire
 import yaml
 import os
+from netutils.interface import abbreviated_interface_name, canonical_interface_name
+from itertools import groupby
+from operator import itemgetter
 
 class FindShortestPath:
     """
@@ -56,6 +59,17 @@ class FindShortestPath:
         }
     }
     """
+    """  for edge in self.graph.edges:
+            myId = self.graph.get_edge_data(edge[0],edge[1])
+            for edges in myId:
+                if "DOWN_PORT" in self.Rspan_Commands[edge[0]]:
+                    for programmed_edege in self.Rspan_Commands[edge[0]]['DOWN_PORT']:
+                        short_port = abbreviated_interface_name(programmed_edege)
+                        if(myId[edges]['LocalPort'].lower() == short_port.lower()):
+                            summ_of_Vlans = self.__summarize_Vlans(self.Rspan_Commands[edge[0]]['DOWN_PORT'][programmed_edege])
+                            if(edge[0]=="MCC-PA1-3-3\n10.182.77.225"):
+                                print(summ_of_Vlans + "MCC-PA1-3-3")
+                            myId[edges]['label'] = summ_of_Vlans"""
     
     def __init__(self, pickle_file_path, test_bed_name, root_nodeIP):
         """
@@ -76,6 +90,14 @@ class FindShortestPath:
             raise ValueError("Multiple root nodes found")
         self.Rspan_paths = {}
         self.Rspan_Commands = {}
+        self.rspan_numbers = []
+        for node in self.graph.nodes:
+            try:
+                rspan_info = int(self.graph.nodes[node]['RSPAN'][0])
+            except:
+                rspan_info = None
+            if rspan_info:
+                self.rspan_numbers.append(rspan_info)
     
     def loop_through_graph(self):
         for node in self.graph.nodes:
@@ -106,16 +128,13 @@ class FindShortestPath:
 
     """Loop through the entire graph and looking at all the Rpan numbers and find the next one to use for the next Rspan VLAN"""
     def find_rspan_next_number(self):
-        rspan_numbers = []
-        for node in self.graph.nodes:
-            try:
-                rspan_info = int(self.graph.nodes[node]['RSPAN'][0])
-            except:
-                rspan_info = None
-            if rspan_info:
-                rspan_numbers.append(rspan_info)
-        if rspan_numbers:
-            self.next_rspan_number = max(rspan_numbers) + 1
+        possible_rspan_numbers = list(range(800,999))
+        for rspanned_possible in  possible_rspan_numbers:
+            if rspanned_possible not in self.rspan_numbers:
+                self.rspan_numbers.append(rspanned_possible)
+                self.next_rspan_number = rspanned_possible
+                return self.next_rspan_number
+
     
     def assign_RSPAN_to_non_rspan_nodes(self):
         self.find_rspan_next_number()
@@ -129,11 +148,11 @@ class FindShortestPath:
                 Serial_Number = self.graph.nodes[node]['Serial_Number']
             except:
                 Serial_Number = "None"
-            if rspan_info == "0" and Serial_Number != "None":
+            if rspan_info == "0" and Serial_Number != "None" and node != self.root_node[0]:
                 self.graph.nodes[node]['RSPAN'] = self.next_rspan_number
                 self.graph.nodes[node]['label'] = f"{self.graph.nodes[node]['label']}\n{self.graph.nodes[node]['RSPAN']}"
                 self.graph.nodes[node]['RSPAN_NAME'] = f'RSPAN_{node.split("\n")[0]}_{self.next_rspan_number}'
-                self.next_rspan_number += 1
+                self.find_rspan_next_number()
                 self.Rspan_Commands[node] = {"Local Rspan Vlans": {"RSPAN": {"number": self.graph.nodes[node]['RSPAN'], 
                                                                             "name": self.graph.nodes[node]['RSPAN_NAME'], 
                                                                             "remote-span": True}, 
@@ -143,11 +162,11 @@ class FindShortestPath:
                                                         },
                                             "active": True
                                             }
-            elif rspan_info == "N" and Serial_Number != "None":
+            elif rspan_info == "N" and Serial_Number != "None" and node != self.root_node[0]:
                 self.graph.nodes[node]['RSPAN'] = self.next_rspan_number
                 self.graph.nodes[node]['label'] = f"{self.graph.nodes[node]['label']}\n{self.graph.nodes[node]['RSPAN']}"
                 self.graph.nodes[node]['RSPAN_NAME'] = f'RSPAN_{node.split("\n")[0]}_{self.next_rspan_number}'
-                self.next_rspan_number += 1
+                self.find_rspan_next_number()
                 self.Rspan_Commands[node] = {"Local Rspan Vlans": {"RSPAN": {"number": self.graph.nodes[node]['RSPAN'],  
                                                             "name": self.graph.nodes[node]['RSPAN_NAME'], 
                                                             "remote-span": False}, 
@@ -155,9 +174,9 @@ class FindShortestPath:
                                             "Carrier Rspan Vlans": {
                                                 "RSPAN": []
                                                         },
-                                            "active": False
+                                            "active": True
                                             }
-            elif rspan_info != "0" and Serial_Number != "None":
+            elif rspan_info != "0" and Serial_Number != "None" and node != self.root_node[0]:
                 self.Rspan_Commands[node] = {"Local Rspan Vlans": {"RSPAN": {"number": self.graph.nodes[node]['RSPAN'][0], 
                                                                             "name": self.graph.nodes[node]['host'], 
                                                                             "remote-span": True}, 
@@ -167,7 +186,7 @@ class FindShortestPath:
                                                         },
                                             "active": True
                                             }
-            elif Serial_Number == "None":
+            elif Serial_Number == "None" or node == self.root_node[0]:
                 self.Rspan_Commands[node] = {"Local Rspan Vlans": {"RSPAN": {"number": "0", 
                                                             "name": "None", 
                                                             "remote-span": False}, 
@@ -229,7 +248,9 @@ class FindShortestPath:
                     if past_node and current_node_cdp_info['index'][index]['device_id'].split(".")[0] == Sub_Graph.nodes[past_node]['host']:
                         if "UP_PORT" not in self.Rspan_Commands[node]:
                             self.Rspan_Commands[node]["UP_PORT"] = {}
-                        self.Rspan_Commands[node]["UP_PORT"][current_node_cdp_info['index'][index]['local_interface']] = self.Rspan_Commands[future_node]["Carrier Rspan Vlans"]["RSPAN"].copy()
+                        self.Rspan_Commands[node]["UP_PORT"][current_node_cdp_info['index'][index]['local_interface']] = {"vlan_list":self.Rspan_Commands[future_node]["Carrier Rspan Vlans"]["RSPAN"].copy()}
+                        self.Rspan_Commands[node]["UP_PORT"][current_node_cdp_info['index'][index]['local_interface']]["switch_at_other_end"] = f"{current_node_cdp_info['index'][index]['device_id'].split(".")[0]}\n{next(iter(current_node_cdp_info['index'][index]['management_addresses']), None)}"
+                        #add actualNextNodein here
                     elif future_node and current_node_cdp_info['index'][index]['device_id'].split(".")[0] == Sub_Graph.nodes[future_node]['host']:
                         if "DOWN_PORT" not in self.Rspan_Commands[node]:
                             self.Rspan_Commands[node]["DOWN_PORT"] = {}
@@ -237,19 +258,43 @@ class FindShortestPath:
                         List_of_all_vlans = self.Rspan_Commands[future_node]["Carrier Rspan Vlans"]["RSPAN"].copy()
                         local_vlan = self.Rspan_Commands[future_node]["Local Rspan Vlans"]["RSPAN"]
                         List_of_all_vlans.append(local_vlan)
-                        self.Rspan_Commands[node]["DOWN_PORT"][local_port] = List_of_all_vlans
+                        self.Rspan_Commands[node]["DOWN_PORT"][local_port] = {"vlan_list":List_of_all_vlans}
+                        self.Rspan_Commands[node]["DOWN_PORT"][local_port]["switch_at_other_end"] = f"{current_node_cdp_info['index'][index]['device_id'].split(".")[0]}\n{next(iter(current_node_cdp_info['index'][index]['management_addresses']), None)}"
                 node_count += 1
     
+    def __summarize_Vlans(self,RSpan_Trunk_port_vlan):
+        vlans = []
+        for vlan in RSpan_Trunk_port_vlan['vlan_list']:
+            vlans.append(int(vlan['number']))
+            # Sort and remove duplicates if your data is unordered
+        sorted_data = sorted(set(vlans))
+        
+        summary = []
+        
+        # enumerate provides the index; groupby aggregates by (value - index)
+        for key, group in groupby(enumerate(sorted_data), lambda x: x[1] - x[0]):
+            # Extract just the original numbers from the group
+            group_list = [val for idx, val in group]
+            
+            if len(group_list) == 1:
+                summary.append(str(group_list[0]))
+            else:
+                summary.append(f"{group_list[0]}-{group_list[-1]}")
+        return ",".join(summary)
+      
     def relabel_edges_for_rspan(self):
-        for node in self.graph.nodes:
-            for edge in self.graph.edges(node):
-                for Rspan_node in self.Rspan_Commands:
-                    #label each edge attaced to node
-                    print(edge[0])
-                    print(edge[1])
-                    myId = self.graph.get_edge_data(edge[0],edge[1])
-                    if edge[0] == Rspan_node:
-                        myId['label'] = "foo"
+        for node in self.Rspan_Commands:
+            if node == "ORCOTTPCN-BANDER2\n10.182.77.247":
+                print(node)
+            if "DOWN_PORT" in self.Rspan_Commands[node]:
+                for down_port in self.Rspan_Commands[node]["DOWN_PORT"]:
+                    edges = self.graph.get_edge_data(node,self.Rspan_Commands[node]["DOWN_PORT"][down_port]["switch_at_other_end"])
+                    short_port_down = abbreviated_interface_name(down_port)
+                    for edge in edges:
+                        if edges[edge]["LocalPort"].lower() == short_port_down.lower() or edges[edge]["RemotePort"].lower() == short_port_down.lower():
+                            summ_of_Vlans = self.__summarize_Vlans(self.Rspan_Commands[node]['DOWN_PORT'][down_port])
+                            edges[edge]['label'] = summ_of_Vlans
+
 
     def print_map_with_new_Rspan_scheme(self):
         self.find_up_and_down_ports()
