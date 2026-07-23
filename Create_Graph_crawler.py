@@ -242,6 +242,8 @@ RSPAN{monitor_info_parsed}""",color={'background': 'white', 'border': 'black'},i
         net.show(f"{self.test_bed_name}_pyviz.html")
 
     def save_as_ansible(self):
+        planer_wordlist=["ftrimmer","bander","planer","Lucidyne","finish","office"]
+        sawmill_wordlist=["btrimmer","bstacker","green","quad","edger","canter","gang","smtrimmer","smstacker"]
         hosts = {}
         for node in self.graph.nodes():
             node_data = self.graph.nodes[node]
@@ -250,6 +252,11 @@ RSPAN{monitor_info_parsed}""",color={'background': 'white', 'border': 'black'},i
                 'ansible_connection': 'network_cli',
                 'ansible_network_os': 'ios'
             }
+            #I can probably sus out where switches go from here
+            for planer in planer_wordlist:
+                if planer in self.graph.nodes[node]["SNMP_Location"]:
+                    host_entry["location"] = "Planer"
+
             hosts[node_data.get('host', node)] = host_entry
 
         testbed = {
