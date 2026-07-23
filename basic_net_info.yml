@@ -141,13 +141,13 @@
           - "{{ snmp_location1 | replace(',','-') }}"
           - "{{ flash_output1 | replace(',','-') }}"
     
-    - name: Ensure CSV header exists
-      ansible.builtin.lineinfile:
-        path: "./{{ location }}/List_sum.csv" 
-        line: "IP Addresses,Hostname,Model,iOS Version,Stacked Serials,Vlan List,Destination VLAN,Device Tracking,RSPAN Capable,SNMP Location,Flash Status"
-        create: yes
-      run_once: true
-      throttle: 1
+#    - name: Ensure CSV header exists
+#      ansible.builtin.lineinfile:
+#        path: "./{{ location }}/List_sum.csv" 
+#        line: "IP Addresses,Hostname,Model,iOS Version,Stacked Serials,Vlan List,Destination VLAN,Device Tracking,RSPAN Capable,SNMP Location,Flash Status"
+#        create: yes
+#      run_once: true
+#      throttle: 1
 
     - name: Save the Config
       ansible.builtin.lineinfile:
