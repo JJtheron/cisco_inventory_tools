@@ -4,6 +4,7 @@ from pyvis.network import Network
 import networkx as nx
 import fire
 import yaml
+import csv
 import os
 from netutils.interface import abbreviated_interface_name, canonical_interface_name
 from itertools import groupby
@@ -199,7 +200,8 @@ class FindShortestPath:
     
 
     def find_all_ports_that_are_not_trunk(self):
-        self.assign_RSPAN_to_non_rspan_nodes()
+        #self.assign_RSPAN_to_non_rspan_nodes()
+        self.read_csv_file_Rspan()
         for node in self.Rspan_Commands:
             try:
                 for port in self.graph.nodes[node]["portInfo"]['interfaces']:
@@ -284,8 +286,6 @@ class FindShortestPath:
       
     def relabel_edges_for_rspan(self):
         for node in self.Rspan_Commands:
-            if node == "ORCOTTPCN-BANDER2\n10.182.77.247":
-                print(node)
             if "DOWN_PORT" in self.Rspan_Commands[node]:
                 for down_port in self.Rspan_Commands[node]["DOWN_PORT"]:
                     edges = self.graph.get_edge_data(node,self.Rspan_Commands[node]["DOWN_PORT"][down_port]["switch_at_other_end"])
@@ -346,6 +346,74 @@ class FindShortestPath:
             if 'Model' in self.graph.nodes[node]:
                 print(f"{self.graph.nodes[node]['host']},{self.graph.nodes[node]['ip_add']},{self.Rspan_Commands[node]["Local Rspan Vlans"]["RSPAN"]["number"]},{self.Rspan_Commands[node]["Local Rspan Vlans"]["RSPAN"]["name"]},{self.graph.nodes[node]['Model']}")
 
+    def read_csv_file_Rspan(self):
+        with open('Rspan_VlanIDS.csv', mode='r', encoding='utf-8') as file:
+            # Pass the file object to DictReader
+            reader = csv.DictReader(file)
+            
+            # Convert all rows into a list of dictionaries
+            data_dict = list(reader)
+
+        for data in data_dict:
+            data["id"] = f"{data["Name"]}\n{data["Ip"]}"
+            try:
+                rspan_info = self.graph.nodes[data["id"]]['RSPAN'][0]
+            except:
+                rspan_info = "0"
+            try:
+                Serial_Number = self.graph.nodes[data["id"]]['Serial_Number']
+            except:
+                Serial_Number = "None"
+            if rspan_info == "0" and Serial_Number != "None" and data["id"] != self.root_node[0]:
+                self.graph.nodes[data["id"]]['RSPAN'] = data["Rspan"]
+                self.graph.nodes[data["id"]]['label'] = f"{"\n".join(self.graph.nodes[data["id"]]['label'].splitlines()[:-1])}\n{self.graph.nodes[data["id"]]['RSPAN']}"
+                self.graph.nodes[data["id"]]['RSPAN_NAME'] = f'RSPAN_{data["Name"]}_{data["Rspan"]}'
+                self.Rspan_Commands[data["id"]] = {"Local Rspan Vlans": {"RSPAN": {"number": self.graph.nodes[data["id"]]['RSPAN'], 
+                                                                            "name": self.graph.nodes[data["id"]]['RSPAN_NAME'], 
+                                                                            "remote-span": True}, 
+                                                                            "Source ports": []},
+                                            "Carrier Rspan Vlans": {
+                                                "RSPAN": []
+                                                        },
+                                            "active": True
+                                            }
+            elif rspan_info == "N" and Serial_Number != "None" and data["id"] != self.root_node[0]:
+                self.graph.nodes[data["id"]]['RSPAN'] = data["Rspan"]
+                self.graph.nodes[data["id"]]['label'] = f"{"\n".join(self.graph.nodes[data["id"]]['label'].splitlines()[:-1])}\n{self.graph.nodes[data["id"]]['RSPAN']}"
+                self.graph.nodes[data["id"]]['RSPAN_NAME'] = f'RSPAN_{data["Name"]}_{data["Rspan"]}'
+                self.Rspan_Commands[data["id"]] = {"Local Rspan Vlans": {"RSPAN": {"number": self.graph.nodes[data["id"]]['RSPAN'],  
+                                                            "name": self.graph.nodes[data["id"]]['RSPAN_NAME'], 
+                                                            "remote-span": False}, 
+                                                            "Source ports": []},
+                                            "Carrier Rspan Vlans": {
+                                                "RSPAN": []
+                                                        },
+                                            "active": True
+                                            }
+            elif rspan_info != "0" and Serial_Number != "None" and data["Name"] != self.root_node[0]:
+                self.graph.nodes[data["id"]]['RSPAN'] = data["Rspan"]
+                self.graph.nodes[data["id"]]['label'] = f"{"\n".join(self.graph.nodes[data["id"]]['label'].splitlines()[:-1])}\n{self.graph.nodes[data["id"]]['RSPAN']}"
+                self.Rspan_Commands[data["id"]] = {"Local Rspan Vlans": {"RSPAN": {"number": data["Rspan"], 
+                                                                            "name": self.graph.nodes[data["id"]]['host'], 
+                                                                            "remote-span": True}, 
+                                                                            "Source ports": []},
+                                            "Carrier Rspan Vlans": {
+                                                "RSPAN": []
+                                                        },
+                                            "active": True
+                                            }
+            elif Serial_Number == "None" or data["Name"] == self.root_node[0]:
+                self.Rspan_Commands[data["id"]] = {"Local Rspan Vlans": {"RSPAN": {"number": "0", 
+                                                            "name": "None", 
+                                                            "remote-span": False}, 
+                                                            "Source ports": []},
+                                            "Carrier Rspan Vlans": {
+                                                "RSPAN": []
+                                                        },
+                                            "active": False
+                                            }
+    
+        
 
 
 if __name__ == "__main__":
