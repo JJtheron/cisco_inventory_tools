@@ -298,13 +298,14 @@ class FindShortestPath:
 
     def print_map_with_new_Rspan_scheme(self):
         self.find_up_and_down_ports()
+        self.find_comms_intent()
         self.relabel_edges_for_rspan()
+        self.create_cisco_ios_monitor_session_commands()
         viz = nx.nx_agraph.to_agraph(self.graph)
         file_name=f"{self.test_bed_name}"
         viz.draw(f"{file_name}.png",prog="dot")
 
     def create_cisco_ios_monitor_session_commands(self):
-        self.find_up_and_down_ports()
         for node in self.Rspan_Commands:
             if self.Rspan_Commands[node]["Local Rspan Vlans"]["RSPAN"]["number"] != "0":
                 transiant_vlan_numbers = []
@@ -324,7 +325,7 @@ class FindShortestPath:
                 if 'DOWN_PORT' in self.Rspan_Commands[node]:
                     for down_port in self.Rspan_Commands[node]['DOWN_PORT']:
                         print(f"interface {down_port}")
-                        transiant_vlan_numbers = [str(vlan['number']) for vlan in self.Rspan_Commands[node]['DOWN_PORT'][down_port]]
+                        transiant_vlan_numbers = [vlan['number'] for vlan in self.Rspan_Commands[node]['DOWN_PORT'][down_port]['vlan_list']]
                         print(f"switchport trunk allowed vlan add {','.join(transiant_vlan_numbers)}")
                 transiant_vlan_numbers = []
                 # Add Transiant and local RSPAN vlans to the up_port Trunk
@@ -341,6 +342,7 @@ class FindShortestPath:
 
     def create_list_of_Vlans_for_network(self):
         self.find_up_and_down_ports()
+        self.find_comms_intent()
         print("Vlan Switch,IP_add ,Vlan Number, Vlan Name, Model")
         for node in self.graph.nodes:
             if 'Model' in self.graph.nodes[node]:
@@ -412,7 +414,72 @@ class FindShortestPath:
                                                         },
                                             "active": False
                                             }
+    def _find_vlans_needed(self):
+        vlans = {}
+        for node in self.graph.nodes:
+            vlans[node] = []
+            if "portInfo" in self.graph.nodes[node]:
+                for interface in self.graph.nodes[node]["portInfo"]["interfaces"]:
+                    vlanNumber = self.graph.nodes[node]["portInfo"]["interfaces"][interface]["vlan"]
+                    if interface not in self.graph.nodes[node]["Trunk"]["interface"] and vlanNumber not in vlans[node]:
+                        vlans[node].append(vlanNumber)
+        return vlans
+    def _check_vlan_added(self,vlanNumb,node,up_down,port):
+        for vlan in self.Rspan_Commands[node][up_down][port]["vlan_list"]:
+            if vlan["number"] == vlanNumb:
+                return True
+        return False
     
+    def add_vlan_if_not_exist(self,common_vlans,node,up_down,port):
+        for vlan in common_vlans:
+            if not self._check_vlan_added(vlan,node,up_down,port):
+                st_struct_vlan = { "number": vlan,
+                              "name" : "common",
+                              "remote-span" : False
+                }
+                self.Rspan_Commands[node][up_down][port]["vlan_list"].append(st_struct_vlan)
+
+
+    
+    def _set_trunks_RspanCommands(self,path,common_vlans):
+
+        for position in range(len(path)):
+            if position+1 >= len(path):
+                break
+            print(path[position])
+            print(path[position+1])
+            if "DOWN_PORT" in self.Rspan_Commands[path[position]] and "UP_PORT" in self.Rspan_Commands[path[position+1]]:
+                for trunk in self.Rspan_Commands[path[position]]["DOWN_PORT"]:
+                        sw1 = self.Rspan_Commands[path[position]]["DOWN_PORT"][trunk]["switch_at_other_end"] 
+                        if sw1 == path[position+1]:
+                            for trunk2 in self.Rspan_Commands[path[position+1]]["UP_PORT"]:
+                                sw2 = self.Rspan_Commands[path[position+1]]["UP_PORT"][trunk2]["switch_at_other_end"]
+                                if sw2 == path[position]:
+                                    self.add_vlan_if_not_exist(common_vlans,path[position],"DOWN_PORT",trunk)
+                                    self.add_vlan_if_not_exist(common_vlans,path[position+1],"UP_PORT",trunk2)
+        
+            if "DOWN_PORT" in self.Rspan_Commands[path[position+1]] and "UP_PORT" in self.Rspan_Commands[path[position]]:
+                for trunk in self.Rspan_Commands[path[position+1]]["DOWN_PORT"]:
+                    for trunk2 in self.Rspan_Commands[path[position]]["UP_PORT"]:
+                        sw1 = self.Rspan_Commands[path[position+1]]["DOWN_PORT"][trunk]["switch_at_other_end"]
+                        sw2 = self.Rspan_Commands[path[position]]["UP_PORT"][trunk2]["switch_at_other_end"]
+                        if sw1 == sw2:
+                            self.Rspan_Commands[path[position+1]]["DOWN_PORT"][trunk]["vlan_list"].extend(common_vlans)
+                            self.Rspan_Commands[path[position]]["UP_PORT"][trunk2]["vlan_list"].extend(common_vlans)
+
+    def find_comms_intent(self):
+        all_vlans = self._find_vlans_needed()
+        for node1 in all_vlans:
+            for node2 in all_vlans:
+                if node1 != node2:
+                    common = list(set(all_vlans[node1]) & set(all_vlans[node2]))
+
+                    if common:
+                        path = nx.shortest_path(self.graph, source=node1, target=node2, weight='weight')
+                        self._set_trunks_RspanCommands(path,common)
+
+        
+        
         
 
 
