@@ -164,10 +164,10 @@
       throttle: 1
         
     
-#    - name: Save all to file
-#      copy:
-#        content: "{{ ansible_net_config }}"
-#        dest: "./{{ location }}/{{ ansible_net_hostname }}_sh_run.txt" 
-#      throttle: 1
+    - name: Save all to file
+      copy:
+        content: "{{ ansible_net_config }}"
+        dest: "./{{ location }}/{{ ansible_net_hostname }}_sh_run.ios" 
+      throttle: 1
 # /mnt/c/Users/theronj/Users/theronj/OneDrive - Weyerhaeuser/TheronJ/Documents/Projects/Switch_refresh_PowerBI
 # /mnt/c/Users/theronj/OneDrive - Weyerhaeuser/TheronJ/Documents/Projects/Switch_refresh_PowerBI
