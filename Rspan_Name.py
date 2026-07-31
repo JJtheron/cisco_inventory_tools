@@ -291,8 +291,9 @@ class FindShortestPath:
             try:
                 for port in self.graph.nodes[node]["portInfo"]['interfaces']:
                     access_port = True
-                    for trunk in self.graph.nodes[node]["Trunk"]["interface"]:
-                        if port == trunk:
+                    for trunk in self.current_config[node]["trunks"]:
+                        Tport  = trunk.replace("interface","").strip()
+                        if port == Tport or "Ap" in port:
                             access_port = False
                             break
                     if access_port:
@@ -429,78 +430,91 @@ class FindShortestPath:
         viz.draw(f"{file_name}.png",prog="dot")
 
     def create_cisco_ios_monitor_session_commands(self):
-        for node in self.Rspan_Commands:
-            transiant_vlan_numbers = []
-            print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-            print(f"Switch: {node.split('\n')[0]} ({node.split('\n')[1]})")
-            print("!vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv")
-            print("Currnet Config")
-            print("!vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv")
-            if node in self.current_config:
-                for vlan in self.current_config[node]["vlans"]:
-                    print(vlan)
-                    for vlan_info in self.current_config[node]["vlans"][vlan]:
-                        print(vlan_info)
-                print("!")
-                for mon in self.current_config[node]["monitor"]:
-                    print(mon)
-                print("!")
-                for trunk in self.current_config[node]["trunks"]:
-                    print(trunk)
-                    for port in self.current_config[node]["trunks"][trunk]:
-                        print(f" {port}")
-                print("!")
-            else:
-                print("*****NO CURRNT config FOUND!!!")
-            print("!vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv")
-            print("Proposed Config")
-            print("!vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv")
-            print("!")
-            if node in self.current_config:
-                for vlan in self.current_config[node]["vlans"]:
-                    vlan_number = re.findall(r'\d+', vlan)
-                    if int(vlan_number[0]) >= 900:
-                        print(f"no {vlan}")
-            print("!")
-            if 'Local Rspan Vlans' in self.Rspan_Commands[node]:
-                print(f"vlan {self.Rspan_Commands[node]['Local Rspan Vlans']['RSPAN']['number']}")
-                print(f"    name {self.Rspan_Commands[node]['Local Rspan Vlans']['RSPAN']['name']}")
-                print("     remote-span")
-                print("!")
-                print("!")
-                ports_spanned = ",".join(self.Rspan_Commands[node]['Local Rspan Vlans']['Source ports'])
-                print("no monitor session 1")
-                print(f"monitor session 1 source interface {self.__collapse_mixed_interfaces(ports_spanned)} rx")
-                print(f"monitor session 1 destination remote {self.Rspan_Commands[node]['Local Rspan Vlans']['RSPAN']["number"]}")
-                print("!")
-                print("!")
-                # Set transiant vlans for all switches in the path
-                sorted_vlans = list(sorted(self.Rspan_Commands[node]['Carrier Rspan Vlans']['RSPAN'], key=lambda item: int(item['number'])))
-                for transiant_vlan in self.Rspan_Commands[node]['Carrier Rspan Vlans']['RSPAN']:
-                    existing = [s.replace("vlan ","") for s in self.current_config[node]["vlans"]]
-                    if transiant_vlan["number"] not in existing:
-                        print(f"vlan {transiant_vlan['number']}")
-                        print(f"    name {transiant_vlan['name']}")
-                        print("     remote-span")
-            # Add all traniant vlans to the down_port Trunk
-            print("!")
-            print("!")
-            if 'DOWN_PORT' in self.Rspan_Commands[node]:
-                for down_port in self.Rspan_Commands[node]['DOWN_PORT']:
-                    print(f"interface {down_port}")
-                    transiant_vlan_numbers = self.__summarize_Vlans(self.Rspan_Commands[node]['DOWN_PORT'][down_port])
-                    print(f"    switchport trunk allowed vlan add {transiant_vlan_numbers}")
-            transiant_vlan_numbers = []
-            # Add Transiant and local RSPAN vlans to the up_port Trunk
-            if 'UP_PORT' in self.Rspan_Commands[node]:
-                for up_port in self.Rspan_Commands[node]['UP_PORT']:
-                    print(f"interface {up_port}")
-                    all_vlan_numbers = self.__summarize_Vlans(self.Rspan_Commands[node]['UP_PORT'][up_port])
-                    print(f"    switchport trunk allowed vlan add {all_vlan_numbers}")
-            print("!")
-            print("!")
-            print("!")
-            print("!")
+        with open("Rspan_commands_for_Cottage_Current.ios", "w", encoding="utf-8") as Currentfile:
+            for node in self.Rspan_Commands:
+                transiant_vlan_numbers = []
+                print("==================================================== ",file=Currentfile)
+                print(f"Switch: {node.split('\n')[0]} - {node.split('\n')[1]} - ssh",file=Currentfile)
+                print("==================================================== ",file=Currentfile)
+                print("Currnet Config",file=Currentfile)
+                print("==================================================== ",file=Currentfile)
+                if node in self.current_config:
+                    for vlan in self.current_config[node]["vlans"]:
+                        print(f"<c>{vlan}",file=Currentfile)
+                        for vlan_info in self.current_config[node]["vlans"][vlan]:
+                            print(f"<c>{vlan_info}",file=Currentfile)
+                    print("<c>!",file=Currentfile)
+                    for mon in self.current_config[node]["monitor"]:
+                        print(f"<c>{mon}",file=Currentfile)
+                    print("<c>!",file=Currentfile)
+                    for trunk in self.current_config[node]["trunks"]:
+                        print(f"<c>{trunk}",file=Currentfile)
+                        for port in self.current_config[node]["trunks"][trunk]:
+                            print(f"<c>{port}",file=Currentfile)
+                    print("<c>!",file=Currentfile)
+                else:
+                    print("*****NO CURRNT config FOUND!!!",file=Currentfile)
+        with open("Rspan_commands_for_Cottage_Proposed.ios", "w", encoding="utf-8") as Proposedfile: 
+            for node in self.Rspan_Commands:
+                print("==================================================== ",file=Proposedfile)
+                print(f"Switch: {node.split('\n')[0]} - {node.split('\n')[1]} - ssh",file=Proposedfile)
+                print("==================================================== ",file=Proposedfile)
+                print("==================================================== ",file=Proposedfile)
+                print("Proposed Config",file=Proposedfile)
+                print("==================================================== ",file=Proposedfile)
+                print("",file=Proposedfile)
+                print("!",file=Proposedfile)
+                if node in self.current_config:
+                    for vlan in self.current_config[node]["vlans"]:
+                        vlan_number = re.findall(r'\d+', vlan)
+                        if int(vlan_number[0]) >= 900:
+                            print(f"no {vlan}",file=Proposedfile)
+                print("!",file=Proposedfile)
+                if 'Local Rspan Vlans' in self.Rspan_Commands[node]:
+                    print(f"vlan {self.Rspan_Commands[node]['Local Rspan Vlans']['RSPAN']['number']}",file=Proposedfile)
+                    print(f"\tname {self.Rspan_Commands[node]['Local Rspan Vlans']['RSPAN']['name']}",file=Proposedfile)
+                    print("\tremote-span",file=Proposedfile)
+                    print("!",file=Proposedfile)
+                    print("!",file=Proposedfile)
+                    # Set transiant vlans for all switches in the path
+                    sorted_vlans = list(sorted(self.Rspan_Commands[node]['Carrier Rspan Vlans']['RSPAN'], key=lambda item: int(item['number'])))
+                    for transiant_vlan in sorted_vlans:
+                        existing = [s.replace("vlan ","") for s in self.current_config[node]["vlans"]]
+                        if transiant_vlan["number"] not in existing:
+                            print(f"vlan {transiant_vlan['number']}",file=Proposedfile)
+                            print(f"\tname {transiant_vlan['name']}",file=Proposedfile)
+                            print("\tremote-span",file=Proposedfile)
+                # Add all traniant vlans to the down_port Trunk
+                print("!",file=Proposedfile)
+                print("!",file=Proposedfile)
+                if 'DOWN_PORT' in self.Rspan_Commands[node]:
+                    for down_port in self.Rspan_Commands[node]['DOWN_PORT']:
+                        print(f"interface {down_port}",file=Proposedfile)
+                        transiant_vlan_numbers = self.__summarize_Vlans(self.Rspan_Commands[node]['DOWN_PORT'][down_port])
+                        print(f"\tswitchport trunk allowed vlan {transiant_vlan_numbers}",file=Proposedfile)
+                transiant_vlan_numbers = []
+                # Add Transiant and local RSPAN vlans to the up_port Trunk
+                if 'UP_PORT' in self.Rspan_Commands[node]:
+                    for up_port in self.Rspan_Commands[node]['UP_PORT']:
+                        print(f"interface {up_port}",file=Proposedfile)
+                        all_vlan_numbers = self.__summarize_Vlans(self.Rspan_Commands[node]['UP_PORT'][up_port])
+                        print(f"\tswitchport trunk allowed vlan {all_vlan_numbers}",file=Proposedfile)
+                print("!",file=Proposedfile)
+                print("!",file=Proposedfile)
+                if 'Local Rspan Vlans' in self.Rspan_Commands[node]:
+                    ports_spanned = ",".join(self.Rspan_Commands[node]['Local Rspan Vlans']['Source ports'])
+                    print("no monitor session 1",file=Proposedfile)
+                    print(f"\tmonitor session 1 source interface {self.__collapse_mixed_interfaces(ports_spanned)} rx",file=Proposedfile)
+                    print(f"\tmonitor session 1 destination remote vlan {self.Rspan_Commands[node]['Local Rspan Vlans']['RSPAN']["number"]}",file=Proposedfile)
+                    print(" !",file=Proposedfile)
+                    print(" !",file=Proposedfile)
+                print("!",file=Proposedfile)
+                print("end",file=Proposedfile)
+                print("!",file=Proposedfile)
+                print("wr mem",file=Proposedfile)
+                print("!",file=Proposedfile)
+                print("sync sdflash:",file=Proposedfile)
+                print("!",file=Proposedfile)
 
     def create_list_of_Vlans_for_network(self):
         self.find_up_and_down_ports()
