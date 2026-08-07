@@ -39,26 +39,41 @@ class Log_into_switches:
                         )
         return new_device
     
-    def __connect_to_switch(self,cisco_switch,config_change):
+    def __connect_to_switch(self,cisco_switch,config_change,interactive=True):
 
         print("Connecting to the switch...")
-        cisco_switch.connect(learn_hostname=True,init_exec_commands=[],init_config_commands=[])
+        try:
+            cisco_switch.connect(learn_hostname=True,init_exec_commands=[],init_config_commands=[])
+        except Exception as e:
+            print(f"Error connecting to switch: {e}")
+            return
         print("Connection successful! Handing complete CLI control over to the user...")
         # 3. Give interactive terminal control directly to the user
         interact_loop = True
         while interact_loop:
-            command = input("command: ")
-            if command == "-end":
+            if interactive:
+                command = input("command: ")
+            if not interactive:
+                try:cisco_switch.default.execute("conf t")
+                except: print("Error<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<")
+                for config in config_change:
+                    try: 
+                        cisco_switch.default.execute(config)
+                    except: print("Error")
+                return
+            elif command == "-end":
                 cisco_switch.disconnect()
                 return
-            elif command == "continue":
+            elif command == "c":
                 for config in config_change:
                     try: cisco_switch.default.execute(config)
                     except: print("Error")
-                    user_in = input("Continue press enter exit to exit")
-                    if "exit" == user_in:
-                        break
-
+                user_in = input("Continue press enter exit to exit: ")
+                if "exit" == user_in:
+                    return
+            elif command == "s":
+                for config in config_change:
+                    print(config)
             else:
                 try: cisco_switch.default.execute(command)
                 except: print("Error")
@@ -70,7 +85,7 @@ class Log_into_switches:
     def set_up_connection(self):
         for node in self.commands_dict:
             cisco_switch_dev  = self._create_Testbed_device(self.commands_dict[node]["host"],self.commands_dict[node]["ip"])
-            self.__connect_to_switch(cisco_switch_dev,self.commands_dict[node]["lines"])
+            self.__connect_to_switch(cisco_switch_dev,self.commands_dict[node]["lines"],False)
 
 if __name__ == "__main__":
     connect = Log_into_switches()
