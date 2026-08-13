@@ -13,7 +13,7 @@ class process_commands:
     def get_swith_name_and_ip(self): 
         file_path = self.commands_file
         Switch_pattern = re.compile(r"Switch:\s+(?P<switch>[^\s]+)\s+-\s+(?P<ip>\d{1,3}(?:\.\d{1,3}){3})")
-        proposed_config_pattern_start = re.compile(r"Proposed Config")
+        proposed_config_pattern_start = re.compile(r"Proposed Config|Currnet Fallback")
         proposed_config_pattern_line = re.compile(r"=======================")
         comments_patttern = re.compile(r"^\!")
         switch_name = None
@@ -27,7 +27,7 @@ class process_commands:
                 match_config_start = proposed_config_pattern_start.search(line)
                 match_config_line = proposed_config_pattern_line.search(line)
                 match_comment = comments_patttern.search(line)
-                if id and record_config and not match_comment:
+                if id and record_config and not match_comment and not match_config_line:
                     self.command_dict[id]["lines"].append(line.strip().replace("\n",""))
                 if match_Switch:
                     switch_name = match_Switch.group("switch")
@@ -36,7 +36,7 @@ class process_commands:
                     self.command_dict[id] = {"ip":ip_address,"host":switch_name,"lines":[]}
                 if match_config_line and not was_last_proposed:
                     record_config  = False
-                elif match_config_line and was_last_proposed:
+                elif match_config_line and was_last_proposed and line != "\n":
                     record_config  = True
                 if match_config_start:
                     was_last_proposed  = True
@@ -50,7 +50,7 @@ class process_commands:
 
 
 if __name__ == "__main__":
-    process = process_commands("Rspan_commands_for_Cottage_Proposed.ios","commands.yml")
+    process = process_commands("Rspan_commands_for_Cottage_Proposed.ios","commandsProposed.yml")
     process.get_swith_name_and_ip()
     process.write_commands_to_ymlFile()
     #fire.Fire(process_commands)

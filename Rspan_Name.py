@@ -113,6 +113,8 @@ class FindShortestPath:
             if rspan_info:
                 self.rspan_numbers.append(rspan_info)
         self.non_Rspan_Models = ["1783-BMS10CL","1783-BMS06TL","1783-BMS20CL"]
+        self.sync_old_way = ["1783-BMS10CL","1783-BMS06TL","1783-BMS20CGP","1783-BMS10CGP","1783-BMS20CL"]
+        self.sync_new_way = ["IE-3300-8T2S"]
     
     def loop_through_graph(self):
         for node in self.graph.nodes:
@@ -480,22 +482,35 @@ class FindShortestPath:
                 print("==================================================== ",file=Currentfile)
                 print(f"Switch: {node.split('\n')[0]} - {node.split('\n')[1]} - ssh",file=Currentfile)
                 print("==================================================== ",file=Currentfile)
-                print("Currnet Config",file=Currentfile)
+                print("Currnet Fallback",file=Currentfile)
                 print("==================================================== ",file=Currentfile)
+                sorted_vlans = list(sorted(self.Rspan_Commands[node]['Carrier Rspan Vlans']['RSPAN'], key=lambda item: int(item['number'])))
+                for transiant_vlan in sorted_vlans:
+                    existing = [s.replace("vlan ","") for s in self.current_config[node]["vlans"]]
+                    if transiant_vlan["number"] not in existing:
+                        print(f"no vlan {transiant_vlan['number']}",file=Currentfile)
                 if node in self.current_config:
                     for vlan in self.current_config[node]["vlans"]:
-                        print(f"<c>{vlan}",file=Currentfile)
+                        print(f"{vlan}",file=Currentfile)
                         for vlan_info in self.current_config[node]["vlans"][vlan]:
-                            print(f"<c>{vlan_info}",file=Currentfile)
-                    print("<c>!",file=Currentfile)
+                            print(f"{vlan_info}",file=Currentfile)
+                    print("!",file=Currentfile)
                     for mon in self.current_config[node]["monitor"]:
-                        print(f"<c>{mon}",file=Currentfile)
-                    print("<c>!",file=Currentfile)
+                        print(f"{mon}",file=Currentfile)
+                    print("!",file=Currentfile)
                     for trunk in self.current_config[node]["trunks"]:
-                        print(f"<c>{trunk}",file=Currentfile)
+                        print(f"{trunk}",file=Currentfile)
                         for port in self.current_config[node]["trunks"][trunk]:
-                            print(f"<c>{port}",file=Currentfile)
-                    print("<c>!",file=Currentfile)
+                            print(f"{port}",file=Currentfile)
+                        if not any("switchport trunk allowed vlan" in port for port in self.current_config[node]["trunks"][trunk]):
+                            print(f"\tswitchport trunk allowed vlan all",file=Currentfile)
+                    print("!",file=Currentfile)
+                    print("wr mem",file=Currentfile)
+                    print("!",file=Currentfile)
+                    if self.graph.nodes[node]['Model'] in self.sync_old_way:
+                        print("sync sdflash: flash:",file=Currentfile)
+                    if self.graph.nodes[node]['Model'] in self.sync_new_way:
+                        print("sync sdflash:",file=Currentfile)
                 else:
                     print("*****NO CURRNT config FOUND!!!",file=Currentfile)
         with open("Rspan_commands_for_Cottage_Proposed.ios", "w", encoding="utf-8") as Proposedfile: 
@@ -571,9 +586,12 @@ class FindShortestPath:
                     print("!",file=Proposedfile)
                     print("end",file=Proposedfile)
                     print("!",file=Proposedfile)
-                    print("wr mem",file=Proposedfile)
+                    print("copy running-config startup-config",file=Proposedfile)
                     print("!",file=Proposedfile)
-                    print("sync sdflash:",file=Proposedfile)
+                    if self.graph.nodes[node]['Model'] in self.sync_old_way:
+                        print("sync sdflash: flash:",file=Proposedfile)
+                    if self.graph.nodes[node]['Model'] in self.sync_new_way:
+                        print("sync sdflash:",file=Proposedfile)
                     print("!",file=Proposedfile)
 
     def create_list_of_Vlans_for_network(self):
